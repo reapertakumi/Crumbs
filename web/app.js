@@ -35,32 +35,46 @@ const UI_ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/>',
+  swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
 };
 
-// Profile picture choices. Drawn in black & white like everything else.
+// Profile picture choices: solid black & white glyphs (holes are cut out).
 const AVATAR_ICONS = {
-  cookie: '<circle cx="12" cy="12" r="9"/><path d="M8.5 9h.01M14 8h.01M15.5 13.5h.01M9.5 15h.01M12 11.5h.01" stroke-width="3"/>',
-  cat: '<path d="M5 20V6l4 3h6l4-3v14z"/><path d="M9.5 13h.01M14.5 13h.01" stroke-width="3"/><path d="M11 16.5h2"/>',
-  ghost: '<path d="M6 20v-9a6 6 0 0 1 12 0v9l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5z"/><path d="M10 10.5h.01M14 10.5h.01" stroke-width="3"/>',
-  rocket: '<path d="M12 2.5c3 2.2 4.5 5.6 4.5 9.5l-1.5 4h-6L7.5 12c0-3.9 1.5-7.3 4.5-9.5z"/><circle cx="12" cy="9.5" r="1.8"/><path d="M10 19l2 2.5 2-2.5"/>',
-  leaf: '<path d="M5 19C5 10 11 5 20 4c-.5 9-6 15-15 15z"/><path d="M5 19l8-8"/>',
-  coffee: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5V6M12 3.5V6"/>',
-  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
-  bolt: '<path d="M13 2.5L5 14h6l-1 7.5L18 10h-6z"/>',
-  moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>',
-  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z"/>',
-  music: '<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
-  planet: '<circle cx="12" cy="12" r="5.5"/><ellipse cx="12" cy="12" rx="10" ry="3.5" transform="rotate(-20 12 12)"/>',
-  mountain: '<path d="M2.5 19.5l6.5-11 4 6.5 2.5-3.5 6 8z"/>',
-  smile: '<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 2 3.5 2 3.5-2 3.5-2"/><path d="M9 9.5h.01M15 9.5h.01" stroke-width="3"/>',
-  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4.5l-3 15"/>',
-  flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-4.3 3.6-6.3 4.5-10.3 3.4 2 7.5 5.7 7.5 10.3 0 3.6-2.6 6.2-5.5 6.2z"/><path d="M12 21c-1.6 0-2.7-1.2-2.7-2.8 0-2 1.6-3 2.2-4.7 1.6 1 3.2 2.7 3.2 4.7 0 1.6-1.1 2.8-2.7 2.8z"/>',
+  cookie: '<path fill-rule="evenodd" d="M12 3a9 9 0 1 0 9 9 3 3 0 0 0-3.5-3A3 3 0 0 0 14 5.5 3 3 0 0 0 12 3zM7.3 9.5a1.4 1.4 0 1 0 2.8 0 1.4 1.4 0 1 0-2.8 0zm5 5.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0zm-5.1.5a1 1 0 1 0 2 0 1 1 0 1 0-2 0zm4.3-4a.9.9 0 1 0 1.8 0 .9.9 0 1 0-1.8 0z"/>',
+  cat: '<path fill-rule="evenodd" d="M4 3.5l4.6 3.8h6.8L20 3.5v10C20 18 16.4 21 12 21s-8-3-8-7.5zM7.8 13a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zm5.8 0a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM11 16h2l-1 1.3z"/>',
+  fox: '<path fill-rule="evenodd" d="M3 3l5.5 4.5h7L21 3l-1.3 9.5L12 21l-7.7-8.5zM7.6 12a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zm6.2 0a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0zM10.8 16.2h2.4L12 17.8z"/>',
+  bear: '<path fill-rule="evenodd" d="M4 7.5a3 3 0 0 1 5-2.2 8 8 0 0 1 6 0 3 3 0 1 1 4.4 3.9A8 8 0 1 1 4.6 9.2 3 3 0 0 1 4 7.5zM8.2 12a1.2 1.2 0 1 0 2.4 0 1.2 1.2 0 1 0-2.4 0zm5.2 0a1.2 1.2 0 1 0 2.4 0 1.2 1.2 0 1 0-2.4 0zM9.5 16a2.5 1.8 0 1 0 5 0 2.5 1.8 0 1 0-5 0z"/><ellipse cx="12" cy="15.6" rx="1" ry=".7"/>',
+  owl: '<path fill-rule="evenodd" d="M5 4l3 2.2a7.5 7.5 0 0 1 8 0L19 4v9a7 7 0 0 1-14 0zM7 11a2.4 2.4 0 1 0 4.8 0 2.4 2.4 0 1 0-4.8 0zm5.2 0a2.4 2.4 0 1 0 4.8 0 2.4 2.4 0 1 0-4.8 0zM11 14.5h2L12 16z"/><circle cx="9.4" cy="11" r=".9"/><circle cx="14.6" cy="11" r=".9"/>',
+  ghost: '<path fill-rule="evenodd" d="M5 21V11a7 7 0 0 1 14 0v10l-2.33-2-2.34 2L12 19l-2.33 2-2.34-2zM8.2 10.5a1.3 1.5 0 1 0 2.6 0 1.3 1.5 0 1 0-2.6 0zm5 0a1.3 1.5 0 1 0 2.6 0 1.3 1.5 0 1 0-2.6 0z"/>',
+  robot: '<path fill-rule="evenodd" d="M11 2.5h2V5h3.5A3.5 3.5 0 0 1 20 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 15.5v-7A3.5 3.5 0 0 1 7.5 5H11zM7.5 11a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0zm6 0a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0zM9 15h6v1.5H9z"/><rect x="1.5" y="10" width="2" height="4" rx="1"/><rect x="20.5" y="10" width="2" height="4" rx="1"/>',
+  alien: '<path fill-rule="evenodd" d="M12 2.5c4.7 0 8 3.3 8 7.6 0 5.3-5 11.4-8 11.4s-8-6.1-8-11.4c0-4.3 3.3-7.6 8-7.6zM6.6 11.2c.3 2 2 3.3 3.8 3.1-.2-2-1.9-3.4-3.8-3.1zm10.8 0c-1.9-.3-3.6 1.1-3.8 3.1 1.8.2 3.5-1.1 3.8-3.1z"/>',
+  rocket: '<path fill-rule="evenodd" d="M12 1.5c3.6 2.6 5.2 6.6 5.2 10.8L15.3 17H8.7l-1.9-4.7C6.8 8.1 8.4 4.1 12 1.5zM10.2 9.5a1.8 1.8 0 1 0 3.6 0 1.8 1.8 0 1 0-3.6 0z"/><path d="M6.6 13.2L3.5 17v2.5l4.3-1.7zM17.4 13.2l3.1 3.8v2.5l-4.3-1.7zM10 18.3h4L12 22.5z"/>',
+  planet: '<circle cx="12" cy="12" r="6.2"/><path d="M3.3 16.8c-1-1.8 1.4-4.2 4.6-5.9l.1 1.6c-2.4 1.4-3.6 2.8-3.2 3.6.7 1.3 5.4.2 9.9-2.4s7.8-6.1 7-7.4c-.4-.8-2.2-.7-4.8.3l-1.2-1.1c3.9-1.6 7-1.8 7.9-.1 1.6 2.8-2.6 7.6-8.3 10.9s-11.4 4.3-12 1.5z"/>',
+  moon: '<path d="M20.5 14.5A9 9 0 0 1 9.5 3.5a9 9 0 1 0 11 11z"/><path d="M17 3l.7 1.6L19.3 5.3l-1.6.7L17 7.6l-.7-1.6-1.6-.7 1.6-.7z"/>',
+  star: '<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5-4.8-4.6 6.6-.9z"/>',
+  bolt: '<path d="M14 1.5L4.5 13.5H11L9.5 22.5 19.5 10H13z"/>',
+  flame: '<path fill-rule="evenodd" d="M12 22c-4.3 0-7.5-3-7.5-7.1 0-5 4.3-7.4 5.2-12.4 4 2.3 9.8 6.7 9.8 12.4 0 4.1-3.2 7.1-7.5 7.1zm0-1.8c1.9 0 3.2-1.4 3.2-3.2 0-2.3-1.9-4.3-3.8-5.5-.5 2.4-2.6 3.4-2.6 5.5 0 1.8 1.3 3.2 3.2 3.2z"/>',
+  heart: '<path d="M12 21.2S2.5 15.6 2.5 9.1A5 5 0 0 1 12 6.6a5 5 0 0 1 9.5 2.5c0 6.5-9.5 12.1-9.5 12.1z"/>',
+  crown: '<path d="M2.5 7.5l5 4.3L12 4.5l4.5 7.3 5-4.3-2 10H4.5zM4.5 19h15v2h-15z"/>',
+  gem: '<path fill-rule="evenodd" d="M6.5 3h11l4.5 6.2L12 21.5 2 9.2zM8 9.5l4 8 4-8z"/>',
+  leaf: '<path fill-rule="evenodd" d="M4 20.5C3.5 10.5 9.5 3.5 21 3c.3 11.5-6.7 17.5-16.3 17.6l-.3.4-1-.6zm2.3-1.6l.9.5c2.6-4.6 5.7-8 9.8-10.6-4.6 1.7-8.2 5.3-10.7 10.1z"/>',
+  tree: '<path d="M12 1.5l6.5 8.5H15l4.5 6.5H13.2V22h-2.4v-5.5H4.5L9 10H5.5z"/>',
+  mountain: '<path d="M1.5 20.5l7.2-12.5 4.3 7.2 2.8-4.2 6.7 9.5z"/><circle cx="17.5" cy="5.5" r="2.5"/>',
+  wave: '<path d="M2 15c2.7 0 2.7-2 5.3-2s2.7 2 5.4 2 2.6-2 5.3-2 2.7 2 4 2v6.5H2zM2 8.5c2.7 0 2.7-2 5.3-2s2.7 2 5.4 2 2.6-2 5.3-2 2.7 2 4 2v3c-1.3 0-1.3-2-4-2s-2.6 2-5.3 2-2.7-2-5.4-2S4.7 11.5 2 11.5z"/>',
+  coffee: '<path fill-rule="evenodd" d="M3.5 8.5h13V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6zM16.5 9.5h1.3a3.2 3.2 0 0 1 0 6.4h-1.6c.2-.6.3-1.2.3-1.9h1.3a1.3 1.3 0 0 0 0-2.6h-1.3z"/><rect x="6.5" y="2.5" width="1.8" height="4.2" rx=".9"/><rect x="10.7" y="2.5" width="1.8" height="4.2" rx=".9"/>',
+  music: '<path d="M8.5 6.2L20.5 3.5v12.3a3 3 0 1 1-1.9-2.8V7.1l-8.2 1.8v9.3a3 3 0 1 1-1.9-2.8z"/>',
+  game: '<path fill-rule="evenodd" d="M7 7h10a5 5 0 0 1 5 5v3.6a2.9 2.9 0 0 1-5 2L15.2 16H8.8L7 17.6a2.9 2.9 0 0 1-5-2V12a5 5 0 0 1 5-5zM6 11.3h1.3V10h1.4v1.3H10v1.4H8.7V14H7.3v-1.3H6zm8.3.1a1 1 0 1 0 2 0 1 1 0 1 0-2 0zm2 2a1 1 0 1 0 2 0 1 1 0 1 0-2 0z"/>',
+  camera: '<path fill-rule="evenodd" d="M8.5 4h7l1.5 2.5h3A2 2 0 0 1 22 8.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2h3zM8 13a4 4 0 1 0 8 0 4 4 0 1 0-8 0zm2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0z"/>',
+  code: '<path d="M8.3 6.2L9.7 7.6 5.3 12l4.4 4.4-1.4 1.4L2.5 12zM15.7 6.2l5.8 5.8-5.8 5.8-1.4-1.4 4.4-4.4-4.4-4.4zM13.2 3.6l1.9.5-4.3 16.3-1.9-.5z"/>',
+  book: '<path d="M3 4.5c3-.8 6-.4 8 1.3V21c-2-1.6-5-2-8-1.3zM21 4.5c-3-.8-6-.4-8 1.3V21c2-1.6 5-2 8-1.3z"/>',
+  anchor: '<path fill-rule="evenodd" d="M12 2a2.8 2.8 0 0 1 1 5.4V9h3v2h-3v8.4c2.7-.4 4.8-2.4 5.3-5H16l3.5-4 3.5 4h-2.6c-.6 4.4-4.3 7.6-8.4 7.6s-7.8-3.2-8.4-7.6H1l3.5-4 3.5 4H5.7c.5 2.6 2.6 4.6 5.3 5V11H8V9h3V7.4A2.8 2.8 0 0 1 12 2zm0 1.8a1 1 0 1 0 0 2 1 1 0 1 0 0-2z"/>',
 };
 
 function icon(name, cls = '', set = UI_ICONS) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
+  if (set === AVATAR_ICONS) cls = (cls + ' fill').trim();
   if (cls) svg.setAttribute('class', cls);
   svg.innerHTML = set[name] || '';
   return svg;
@@ -76,15 +90,28 @@ function writeStore(key, val) {
 }
 
 const prefs = Object.assign(
-  { theme: 'system', size: 'm', newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false },
+  {
+    theme: 'system', size: 'm', layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
+  },
   readStore('crumbs.prefs', {}));
 const savePrefs = () => writeStore('crumbs.prefs', prefs);
+
+// The background photo is kept separately (it can be a few hundred KB).
+function readBgImage() { try { return localStorage.getItem('crumbs.bgimg') || ''; } catch { return ''; } }
 
 function applyPrefs() {
   const root = document.documentElement;
   if (prefs.theme === 'light' || prefs.theme === 'dark') root.dataset.theme = prefs.theme;
   else delete root.dataset.theme;
   root.dataset.size = prefs.size;
+  root.dataset.layout = prefs.layout;
+  const img = prefs.bg === 'image' ? readBgImage() : '';
+  root.dataset.bg = prefs.bg === 'image' && !img ? 'plain' : prefs.bg;
+  root.toggleAttribute('data-bgbw', !!prefs.bgBW);
+  root.style.setProperty('--bg-strength', String(prefs.bgStrength / 100));
+  if (img) root.style.setProperty('--bg-img', `url("${img}")`);
+  else root.style.removeProperty('--bg-img');
 }
 applyPrefs();
 
@@ -99,7 +126,7 @@ const saveTree = () => writeStore('crumbs.tree', { open: [...treeState.open], un
 // ---------- state ----------
 
 const S = {
-  me: null, guest: false, loginRequired: true,
+  me: null, guest: false, loginRequired: true, registration: false,
   list: [], folders: [],
   fmap: new Map(),     // id -> folder
   kids: new Map(),     // parent id (0 = top) -> child folders
@@ -176,15 +203,25 @@ const wide = () => matchMedia('(min-width: 1000px)').matches;
 const narrow = () => matchMedia('(max-width: 820px)').matches;
 
 // Small confirm / prompt dialog. Resolves to true, the typed value, or null.
+// input: 'password', or { type, value, min, step, placeholder }.
 function ask({ title, text = '', ok = 'OK', input = null }) {
   const d = $('#ask'), inp = $('#ask-input');
   $('#ask-title').textContent = title;
   $('#ask-text').textContent = text;
   $('#ask-ok').textContent = ok;
-  inp.hidden = !input;
+  const opt = typeof input === 'string' ? { type: input } : input;
+  inp.hidden = !opt;
   inp.value = '';
-  inp.required = !!input;
-  if (input) { inp.type = input; inp.minLength = 6; inp.autocomplete = 'new-password'; }
+  inp.required = !!opt;
+  for (const a of ['min', 'step', 'placeholder', 'minLength']) inp.removeAttribute(a);
+  if (opt) {
+    inp.type = opt.type || 'text';
+    if (opt.type === 'password') { inp.minLength = 6; inp.autocomplete = 'new-password'; }
+    if (opt.min != null) inp.min = opt.min;
+    if (opt.step != null) inp.step = opt.step;
+    if (opt.placeholder) inp.placeholder = opt.placeholder;
+    if (opt.value != null) inp.value = opt.value;
+  }
   d.returnValue = '';
   d.showModal();
   (input ? inp : $('#ask-ok')).focus();
@@ -202,11 +239,19 @@ function fillAvatar(el, u) {
   } else if (av.startsWith('icon:') && AVATAR_ICONS[av.slice(5)]) {
     el.replaceChildren(icon(av.slice(5), '', AVATAR_ICONS));
   } else {
-    el.replaceChildren(document.createTextNode(firstLetter(u && u.username)));
+    el.replaceChildren(document.createTextNode(firstLetter(u && nameOf(u))));
   }
   return el;
 }
 const avatarEl = (u, cls = '') => fillAvatar(h('span', { class: 'avatar ' + cls }), u);
+const nameOf = (u) => (u && (u.displayName || u.username)) || '';
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  return `${(n / 1024 ** 3).toFixed(1)} GB`;
+}
 
 // ---------- boot & auth ----------
 
@@ -214,7 +259,7 @@ async function boot() {
   let s;
   try { s = await api('GET', '/api/state'); }
   catch (e) { toast('Cannot reach Crumbs: ' + e.message); return; }
-  S.me = s.user; S.guest = s.guest; S.loginRequired = s.loginRequired;
+  S.me = s.user; S.guest = s.guest; S.loginRequired = s.loginRequired; S.registration = s.registration;
   if (s.setup) return showAuth('setup');
   if (!s.user) return showAuth('login');
   showApp();
@@ -222,40 +267,54 @@ async function boot() {
   handleAddParam();
 }
 
+// Auth modes: 'login', 'register' (when the admin allows it), 'setup' (first run).
 let authMode = 'login';
-function showAuth(mode, canGoBack = false) {
+let authCanGoBack = false;
+function showAuth(mode, canGoBack = authCanGoBack) {
   authMode = mode;
+  authCanGoBack = canGoBack;
   document.querySelectorAll('dialog[open]').forEach((d) => d.close());
   closeMenus();
   $('#app').hidden = true;
   $('#auth').hidden = false;
   const f = $('#auth-form');
   f.reset();
-  const setup = mode === 'setup';
-  $('#auth-sub').textContent = setup
-    ? 'Welcome! Create the first account. It becomes the admin.'
-    : 'Sign in to see your crumbs.';
-  $('#auth-confirm').hidden = !setup;
-  field(f, 'confirm').required = setup;
-  field(f, 'password').autocomplete = setup ? 'new-password' : 'current-password';
-  $('#auth-submit').textContent = setup ? 'Create admin account' : 'Sign in';
+  const creating = mode !== 'login';
+  $('#auth-sub').textContent = {
+    setup: 'Welcome! Create the first account. It becomes the admin.',
+    register: 'Create your account.',
+    login: 'Sign in to see your crumbs.',
+  }[mode];
+  $('#auth-confirm').hidden = !creating;
+  $('#auth-display').hidden = !creating;
+  field(f, 'confirm').required = creating;
+  field(f, 'password').autocomplete = creating ? 'new-password' : 'current-password';
+  $('#auth-submit').textContent = { setup: 'Create admin account', register: 'Create account', login: 'Sign in' }[mode];
+  const sw = $('#auth-switch');
+  sw.hidden = mode === 'setup' || !S.registration;
+  sw.textContent = mode === 'register' ? 'I already have an account' : 'Create an account';
   $('#auth-back').hidden = !canGoBack;
   showError('#auth-error', '');
-  field(f, 'username').focus();
+  field(f, creating ? 'displayName' : 'username').focus();
 }
+
+$('#auth-switch').addEventListener('click', () => showAuth(authMode === 'register' ? 'login' : 'register'));
 
 $('#auth-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.currentTarget;
   const username = field(f, 'username').value.trim();
   const password = field(f, 'password').value;
-  if (authMode === 'setup' && password !== field(f, 'confirm').value) {
+  const displayName = field(f, 'displayName').value.trim();
+  if (authMode !== 'login' && password !== field(f, 'confirm').value) {
     return showError('#auth-error', 'The passwords do not match.');
   }
   const btn = $('#auth-submit');
-  busy(btn, true, authMode === 'setup' ? 'Creating…' : 'Signing in…');
+  busy(btn, true, authMode === 'login' ? 'Signing in…' : 'Creating…');
   try {
-    await api('POST', authMode === 'setup' ? '/api/setup' : '/api/login', { username, password });
+    const path = { setup: '/api/setup', register: '/api/register', login: '/api/login' }[authMode];
+    await api('POST', path, { username, password, displayName });
+    authCanGoBack = false;
     await boot();
   } catch (err) {
     showError('#auth-error', err.message);
@@ -263,7 +322,7 @@ $('#auth-form').addEventListener('submit', async (e) => {
     busy(btn, false);
   }
 });
-$('#auth-back').addEventListener('click', () => boot());
+$('#auth-back').addEventListener('click', () => { authCanGoBack = false; boot(); });
 
 function showApp() {
   $('#auth').hidden = true;
@@ -284,8 +343,9 @@ function closeMenus(except) {
   document.querySelectorAll('.dd.open').forEach((dd) => {
     if (dd === except) return;
     dd.classList.remove('open');
-    dd.querySelector('[data-dd]').setAttribute('aria-expanded', 'false');
+    dd.querySelector('[data-dd]')?.setAttribute('aria-expanded', 'false');
   });
+  document.querySelectorAll('.more-btn[aria-expanded="true"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
 }
 
 document.addEventListener('click', (e) => {
@@ -331,22 +391,24 @@ function runAction(name) {
     case 'settings': return openSettings();
     case 'signout': return signOut();
     case 'signin': return showAuth('login', true);
+    case 'io': return openIO(null);
   }
 }
 
 function renderMe() {
   const guestUser = { username: 'Guest', avatar: '' };
   const u = S.guest ? guestUser : S.me;
-  $('#me-name').textContent = u.username;
+  $('#me-name').textContent = nameOf(u);
   fillAvatar($('#me-avatar'), u);
   const item = (act, ic, label) => h('button', { type: 'button', role: 'menuitem', 'data-act': act }, icon(ic), label);
   const head = h('div', { class: 'menu-head' }, avatarEl(u, 'sm'),
-    h('div', {}, h('strong', { text: u.username }),
-      h('span', { class: 'muted small', text: S.guest ? `Using ${S.me.username}'s crumbs` : (S.me.isAdmin ? 'Admin' : 'Member') })));
+    h('div', {}, h('strong', { text: nameOf(u) }),
+      h('span', { class: 'muted small', text: S.guest ? `Using ${nameOf(S.me)}'s crumbs` : `@${S.me.username}${S.me.isAdmin ? ' · Admin' : ''}` })));
   const items = S.guest
     ? [item('settings', 'gear', 'Settings'), h('hr'), item('signin', 'logout', 'Sign in')]
     : [S.me.isAdmin ? item('admin', 'shield', 'Admin') : null,
        item('profile', 'user', 'Profile'),
+       item('io', 'swap', 'Import / export'),
        item('settings', 'gear', 'Settings'),
        h('hr'),
        item('signout', 'logout', 'Sign out')];
@@ -1103,22 +1165,32 @@ $('#folder-delete').addEventListener('click', async () => {
 function openProfile() {
   $('#pw-form').reset();
   showError('#pw-error', '');
+  field($('#name-form'), 'displayName').value = S.me.displayName || '';
   renderProfile();
   $('#profile').showModal();
 }
 
+// Built-in choices: the first letter, then every icon. A current photo comes first.
+function avatarChoices(u) {
+  const cur = u.avatar || '';
+  const opts = [{ v: '', label: 'First letter' }, ...Object.keys(AVATAR_ICONS).map((k) => ({ v: 'icon:' + k, label: k }))];
+  if (cur.startsWith('/avatar/')) opts.unshift({ v: cur, label: 'Uploaded photo', photo: true });
+  return opts.map((o) => ({ ...o, active: o.v === cur }));
+}
+
+function avatarGrid(u, onPick) {
+  return avatarChoices(u).map((o) => h('button', {
+    type: 'button', class: 'avatar-opt' + (o.active ? ' active' : ''),
+    title: o.label, 'aria-label': o.label, 'aria-pressed': String(o.active),
+    onclick: () => { if (!o.photo) onPick(o.v); },
+  }, avatarEl({ username: u.username, displayName: u.displayName, avatar: o.v })));
+}
+
 function renderProfile() {
   fillAvatar($('#profile-avatar'), S.me);
-  $('#profile-name').textContent = S.me.username;
-  $('#profile-role').textContent = S.me.isAdmin ? 'Admin' : 'Member';
-  const cur = S.me.avatar || '';
-  const opts = [{ v: '', label: 'First letter' }, ...Object.keys(AVATAR_ICONS).map((k) => ({ v: 'icon:' + k, label: k }))];
-  if (cur.startsWith('/avatar/')) opts.unshift({ v: cur, label: 'Your photo', photo: true });
-  $('#avatar-grid').replaceChildren(...opts.map((o) => h('button', {
-    type: 'button', class: 'avatar-opt' + (o.v === cur ? ' active' : ''),
-    title: o.label, 'aria-label': o.label, 'aria-pressed': String(o.v === cur),
-    onclick: () => { if (!o.photo) setAvatar(o.v); },
-  }, avatarEl({ username: S.me.username, avatar: o.v }))));
+  $('#profile-name').textContent = nameOf(S.me);
+  $('#profile-role').textContent = `@${S.me.username}${S.me.isAdmin ? ' · Admin' : ''}`;
+  $('#avatar-grid').replaceChildren(...avatarGrid(S.me, setAvatar));
 }
 
 function refreshMe(u) {
@@ -1132,17 +1204,18 @@ async function setAvatar(v) {
   catch (err) { toast(err.message); }
 }
 
-$('#avatar-file').addEventListener('change', async (e) => {
+$('#name-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    refreshMe(await api('PUT', '/api/me', { displayName: field(e.currentTarget, 'displayName').value }));
+    toast('Display name saved');
+  } catch (err) { toast(err.message); }
+});
+
+$('#avatar-file').addEventListener('change', (e) => {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file) return;
-  try {
-    const blob = await makeSquare(file);
-    refreshMe(await api('PUT', '/api/me/avatar/image', blob));
-    toast('Profile picture updated');
-  } catch (err) {
-    toast(err.message === 'not an image' ? 'That file is not an image Crumbs can read.' : err.message);
-  }
+  if (file) openCropper(file);
 });
 
 $('#pw-form').addEventListener('submit', async (e) => {
@@ -1159,6 +1232,481 @@ $('#pw-form').addEventListener('submit', async (e) => {
   }
 });
 
+// ---------- photo cropper: drag to move, scroll / pinch / slider to zoom ----------
+
+const crop = { url: '', w: 0, h: 0, V: 0, s: 1, min: 1, x: 0, y: 0, pointers: new Map(), pinch: null };
+const cropDlg = $('#crop-dlg'), cropStage = $('#crop-stage'), cropImg = $('#crop-img'), cropZoom = $('#crop-zoom');
+
+function openCropper(file) {
+  if (crop.url) URL.revokeObjectURL(crop.url);
+  crop.url = URL.createObjectURL(file);
+  cropImg.onload = () => {
+    crop.w = cropImg.naturalWidth;
+    crop.h = cropImg.naturalHeight;
+    crop.V = cropStage.clientWidth;
+    crop.min = crop.V / Math.min(crop.w, crop.h);
+    crop.s = crop.min;
+    crop.x = (crop.V - crop.w * crop.s) / 2;
+    crop.y = (crop.V - crop.h * crop.s) / 2;
+    cropImg.style.width = crop.w + 'px';
+    cropZoom.value = '1';
+    renderCrop();
+  };
+  cropImg.onerror = () => { cropDlg.close(); toast('That file is not an image Crumbs can read.'); };
+  cropImg.removeAttribute('style');
+  cropDlg.showModal();
+  cropImg.src = crop.url;
+}
+
+function renderCrop() {
+  const { V, w, h, s } = crop;
+  crop.x = Math.min(0, Math.max(V - w * s, crop.x));
+  crop.y = Math.min(0, Math.max(V - h * s, crop.y));
+  cropImg.style.transform = `translate(${crop.x}px, ${crop.y}px) scale(${s})`;
+}
+
+// Zoom around a point (cx, cy) inside the stage so that point stays put.
+function zoomTo(next, cx = crop.V / 2, cy = crop.V / 2) {
+  next = Math.min(crop.min * 5, Math.max(crop.min, next));
+  const px = (cx - crop.x) / crop.s, py = (cy - crop.y) / crop.s;
+  crop.s = next;
+  crop.x = cx - px * next;
+  crop.y = cy - py * next;
+  cropZoom.value = String(next / crop.min);
+  renderCrop();
+}
+
+const stagePoint = (e) => {
+  const r = cropStage.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+};
+
+cropZoom.addEventListener('input', () => zoomTo(crop.min * Number(cropZoom.value)));
+cropStage.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const p = stagePoint(e);
+  zoomTo(crop.s * Math.exp(-e.deltaY * 0.0015), p.x, p.y);
+}, { passive: false });
+
+cropStage.addEventListener('pointerdown', (e) => {
+  cropStage.setPointerCapture(e.pointerId);
+  crop.pointers.set(e.pointerId, stagePoint(e));
+  cropStage.classList.add('dragging');
+  if (crop.pointers.size === 2) {
+    const [a, b] = [...crop.pointers.values()];
+    crop.pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), s: crop.s };
+  }
+});
+cropStage.addEventListener('pointermove', (e) => {
+  const prev = crop.pointers.get(e.pointerId);
+  if (!prev) return;
+  const p = stagePoint(e);
+  crop.pointers.set(e.pointerId, p);
+  if (crop.pointers.size === 1) {
+    crop.x += p.x - prev.x;
+    crop.y += p.y - prev.y;
+    renderCrop();
+  } else if (crop.pinch && crop.pointers.size === 2) {
+    const [a, b] = [...crop.pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomTo(crop.pinch.s * (dist / crop.pinch.dist), (a.x + b.x) / 2, (a.y + b.y) / 2);
+  }
+});
+const endPointer = (e) => {
+  crop.pointers.delete(e.pointerId);
+  if (crop.pointers.size < 2) crop.pinch = null;
+  if (!crop.pointers.size) cropStage.classList.remove('dragging');
+};
+cropStage.addEventListener('pointerup', endPointer);
+cropStage.addEventListener('pointercancel', endPointer);
+cropDlg.addEventListener('close', () => {
+  crop.pointers.clear();
+  if (crop.url) { URL.revokeObjectURL(crop.url); crop.url = ''; }
+});
+
+$('#crop-save').addEventListener('click', async () => {
+  const btn = $('#crop-save');
+  busy(btn, true, 'Saving…');
+  try {
+    const N = 256, c = document.createElement('canvas');
+    c.width = N; c.height = N;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(cropImg, -crop.x / crop.s, -crop.y / crop.s, crop.V / crop.s, crop.V / crop.s, 0, 0, N, N);
+    const blob = await canvasBlob(c, 'image/jpeg', 0.9);
+    refreshMe(await api('PUT', '/api/me/avatar/image', blob));
+    cropDlg.close();
+    toast('Profile picture updated');
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy(btn, false);
+  }
+});
+
+// ---------- import / export ----------
+
+let ioUser = null; // null = me, otherwise the admin's target user
+
+function openIO(user) {
+  ioUser = user;
+  $('#io-title').textContent = user ? `Import & export: ${nameOf(user)}` : 'Import & export';
+  $('#io-previews').hidden = !!user;
+  $('#io-result').hidden = true;
+  updatePreviewCount();
+  $('#io-dlg').showModal();
+}
+
+function updatePreviewCount() {
+  const missing = S.list.filter((b) => !b.thumb).length;
+  $('#io-fetch').disabled = !missing || previewJob;
+  if (!previewJob) $('#io-fetch-status').textContent = missing ? `${missing} crumb${missing === 1 ? ' has' : 's have'} no thumbnail.` : 'Every crumb has a thumbnail.';
+}
+
+function download(text, filename, mime) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = h('a', { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+$('#io-export').addEventListener('click', async () => {
+  const btn = $('#io-export');
+  busy(btn, true, 'Preparing…');
+  try {
+    const data = await api('GET', ioUser ? `/api/users/${ioUser.id}/export` : '/api/export');
+    const fmt = $('#io-format').value;
+    const out = EXPORTERS[fmt](data);
+    const day = new Date().toISOString().slice(0, 10);
+    download(out.text, `crumbs-${data.user}-${day}.${out.ext}`, out.mime);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy(btn, false);
+  }
+});
+
+$('#io-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const res = $('#io-result');
+  res.hidden = false;
+  res.textContent = `Reading ${file.name}…`;
+  try {
+    const items = parseImport(await file.text(), file.name);
+    if (!items.length) { res.textContent = 'No links found in that file.'; return; }
+    res.textContent = `Importing ${items.length} links…`;
+    const r = await api('POST', ioUser ? `/api/users/${ioUser.id}/import` : '/api/import',
+      { items, skipDuplicates: $('#io-skip').checked });
+    res.textContent = `Added ${r.added} crumb${r.added === 1 ? '' : 's'}`
+      + (r.folders ? ` and ${r.folders} folder${r.folders === 1 ? '' : 's'}` : '')
+      + (r.skipped ? `. Skipped ${r.skipped} (already saved or not a web link).` : '.');
+    if (ioUser) { if ($('#admin').open) await loadUsers(); }
+    else { await loadBookmarks(); updatePreviewCount(); }
+  } catch (err) {
+    res.textContent = 'Import failed: ' + err.message;
+  }
+});
+
+// Fetch thumbnails and favicons for crumbs that have none (e.g. after an import).
+let previewJob = false;
+$('#io-fetch').addEventListener('click', async () => {
+  const todo = S.list.filter((b) => !b.thumb);
+  if (!todo.length || previewJob) return;
+  previewJob = true;
+  $('#io-fetch').disabled = true;
+  const status = $('#io-fetch-status');
+  let done = 0, found = 0;
+  const step = async (b) => {
+    try {
+      const meta = await api('GET', '/api/meta?url=' + encodeURIComponent(b.url));
+      const [thumb, ico] = await Promise.all([
+        firstOk(meta.images, (x) => makeThumb(x)),
+        b.icon ? null : firstOk(meta.icons, makeIcon),
+      ]);
+      if (thumb) { await api('PUT', `/api/bookmarks/${b.id}/thumb`, thumb); found++; }
+      if (ico) await api('PUT', `/api/bookmarks/${b.id}/icon`, ico);
+    } catch { /* skip this one */ }
+    done++;
+    status.textContent = `Fetching previews… ${done} of ${todo.length}`;
+  };
+  const queue = [...todo];
+  const worker = async () => { while (queue.length) await step(queue.shift()); };
+  await Promise.all([worker(), worker(), worker()]); // 3 at a time keeps the Pi relaxed
+  previewJob = false;
+  await loadBookmarks();
+  status.textContent = `Done: found ${found} thumbnail${found === 1 ? '' : 's'} for ${todo.length} crumb${todo.length === 1 ? '' : 's'}.`;
+  $('#io-fetch').disabled = !S.list.some((b) => !b.thumb);
+  if (!$('#io-dlg').open) toast(`Previews fetched for ${found} crumbs`);
+});
+
+// ---- exporters ----
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function exportTree(data) {
+  const fmap = new Map(data.folders.map((f) => [f.id, f]));
+  const kids = new Map();
+  for (const f of data.folders) {
+    const p = f.parentId && fmap.has(f.parentId) ? f.parentId : 0;
+    if (!kids.has(p)) kids.set(p, []);
+    kids.get(p).push(f);
+  }
+  const marks = new Map();
+  for (const b of data.bookmarks) {
+    const k = b.folderId && fmap.has(b.folderId) ? b.folderId : 0;
+    if (!marks.has(k)) marks.set(k, []);
+    marks.get(k).push(b);
+  }
+  const path = (id) => {
+    const out = [];
+    for (let cur = id, g = 0; cur && fmap.has(cur) && g < 100; cur = fmap.get(cur).parentId, g++) out.unshift(fmap.get(cur).name);
+    return out;
+  };
+  return { kids: (id) => kids.get(id) || [], marks: (id) => marks.get(id) || [], path };
+}
+
+const csvCell = (v) => (/[",\n\r]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+const iso = (t) => (t ? new Date(t * 1000).toISOString() : '');
+
+const EXPORTERS = {
+  html(data) {
+    const t = exportTree(data);
+    const lines = [
+      '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+      '<!-- This is an automatically generated file. It will be read and overwritten. DO NOT EDIT! -->',
+      '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+      '<TITLE>Bookmarks</TITLE>',
+      '<H1>Bookmarks</H1>',
+      '<DL><p>',
+    ];
+    const walk = (id, pad) => {
+      for (const f of t.kids(id)) {
+        lines.push(`${pad}<DT><H3 ADD_DATE="${f.created || ''}">${esc(f.name)}</H3>`, `${pad}<DL><p>`);
+        walk(f.id, pad + '    ');
+        lines.push(`${pad}</DL><p>`);
+      }
+      for (const b of t.marks(id)) {
+        lines.push(`${pad}<DT><A HREF="${esc(b.url)}" ADD_DATE="${b.created || ''}" LAST_MODIFIED="${b.updated || ''}">${esc(b.name)}</A>`);
+        if (b.description) lines.push(`${pad}<DD>${esc(b.description)}`);
+      }
+    };
+    walk(0, '    ');
+    lines.push('</DL><p>');
+    return { text: lines.join('\n') + '\n', ext: 'html', mime: 'text/html' };
+  },
+  json(data) {
+    return { text: JSON.stringify(data, null, 2), ext: 'json', mime: 'application/json' };
+  },
+  csv(data) {
+    const t = exportTree(data);
+    const rows = [['name', 'url', 'description', 'folder', 'created', 'updated']];
+    for (const b of data.bookmarks) rows.push([b.name, b.url, b.description, t.path(b.folderId).join(' / '), iso(b.created), iso(b.updated)]);
+    return { text: rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n', ext: 'csv', mime: 'text/csv' };
+  },
+  md(data) {
+    const t = exportTree(data);
+    const lines = ['# Crumbs', ''];
+    const link = (b) => `- [${b.name.replace(/([\[\]])/g, '\\$1')}](${b.url.replace(/\)/g, '%29')})${b.description ? ' — ' + b.description.replace(/\s+/g, ' ') : ''}`;
+    const top = t.marks(0);
+    if (top.length) lines.push('## Uncategorized', '', ...top.map(link), '');
+    const walk = (id, depth) => {
+      for (const f of t.kids(id)) {
+        lines.push(`${'#'.repeat(Math.min(depth, 6))} ${f.name}`, '');
+        const ms = t.marks(f.id);
+        if (ms.length) lines.push(...ms.map(link), '');
+        walk(f.id, depth + 1);
+      }
+    };
+    walk(0, 2);
+    return { text: lines.join('\n'), ext: 'md', mime: 'text/markdown' };
+  },
+  txt(data) {
+    return { text: data.bookmarks.map((b) => b.url).join('\n') + '\n', ext: 'txt', mime: 'text/plain' };
+  },
+};
+
+// ---- importers: everything becomes { name, url, description, path, created } ----
+
+function toSeconds(v) {
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  if (Number.isFinite(n) && n > 0) {
+    if (n > 1e16) return Math.floor(n / 1e6) - 11644473600; // Chrome: µs since 1601
+    if (n > 1e14) return Math.floor(n / 1e6);             // Firefox: µs since 1970
+    if (n > 1e11) return Math.floor(n / 1e3);             // ms
+    return Math.floor(n);                                  // s
+  }
+  const d = Date.parse(v);
+  return Number.isFinite(d) ? Math.floor(d / 1000) : 0;
+}
+
+const splitPath = (s) => (s ? String(s).split(String(s).includes(' / ') ? ' / ' : /\s*[\/>]\s*/).map((x) => x.trim()).filter(Boolean) : []);
+
+function parseImport(text, filename = '') {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  const head = text.slice(0, 2000);
+  if (ext === 'json' || /^\s*[\[{]/.test(head)) return importJSON(JSON.parse(text));
+  if (ext === 'html' || ext === 'htm' || /<!DOCTYPE NETSCAPE|<dl[\s>]|<a\s+href/i.test(head)) return importHTML(text);
+  if (ext === 'csv') return importCSV(text);
+  if (ext === 'md' || ext === 'markdown' || /\]\(https?:\/\//.test(head)) return importMarkdown(text);
+  return importText(text);
+}
+
+function importHTML(text) {
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const items = [];
+  const walk = (dl, path) => {
+    for (const dt of dl.children) {
+      if (dt.tagName !== 'DT') continue;
+      const h3 = dt.querySelector(':scope > h3');
+      const a = dt.querySelector(':scope > a');
+      if (h3) {
+        const next = dt.nextElementSibling;
+        const sub = dt.querySelector(':scope > dl') || (next && next.tagName === 'DL' ? next : null);
+        if (sub) walk(sub, [...path, h3.textContent.trim()]);
+      } else if (a && a.getAttribute('href')) {
+        const next = dt.nextElementSibling;
+        const dd = next && next.tagName === 'DD' ? next : dt.querySelector(':scope > dd');
+        items.push({
+          name: a.textContent.trim(), url: a.getAttribute('href'),
+          description: dd ? dd.textContent.trim() : '', path, created: toSeconds(a.getAttribute('add_date')),
+        });
+      }
+    }
+  };
+  const root = doc.querySelector('dl');
+  if (root) walk(root, []);
+  if (!items.length) {
+    for (const a of doc.querySelectorAll('a[href]')) items.push({ name: a.textContent.trim(), url: a.getAttribute('href'), description: '', path: [], created: 0 });
+  }
+  return items.filter((i) => /^https?:/i.test(i.url));
+}
+
+function importJSON(data) {
+  const items = [];
+  // Crumbs backup
+  if (data && Array.isArray(data.bookmarks)) {
+    const t = exportTree({ folders: data.folders || [], bookmarks: [] });
+    for (const b of data.bookmarks) {
+      items.push({ name: b.name || b.title || '', url: b.url || '', description: b.description || '', path: t.path(b.folderId), created: toSeconds(b.created) });
+    }
+    return items;
+  }
+  // Chrome / Edge "Bookmarks" file, Firefox .json backup, or any tree with children
+  const walk = (node, path) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { node.forEach((n) => walk(n, path)); return; }
+    const url = node.url || node.uri || node.href || node.link;
+    if (typeof url === 'string' && /^https?:/i.test(url)) {
+      const folder = node.folder || node.path || node.collection || node.category;
+      items.push({
+        name: node.name || node.title || '', url,
+        description: node.description || node.note || node.excerpt || '',
+        path: folder ? (Array.isArray(folder) ? folder : splitPath(folder)) : path,
+        created: toSeconds(node.created || node.date_added || node.dateAdded || node.created_at || node.time_added),
+      });
+      return;
+    }
+    const kids = node.children || (node.roots && Object.values(node.roots));
+    if (kids) {
+      const name = node.name || node.title;
+      walk(kids, name && !node.roots ? [...path, name] : path);
+    }
+  };
+  walk(data, []);
+  return items;
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',' || c === ';' && !text.slice(0, 500).includes(',')) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim()));
+}
+
+function importCSV(text) {
+  const rows = parseCSV(text.replace(/^﻿/, ''));
+  if (!rows.length) return [];
+  const header = rows[0].map((x) => x.trim().toLowerCase());
+  const col = (...names) => header.findIndex((x) => names.includes(x));
+  const iu = col('url', 'link', 'href', 'uri', 'address');
+  const items = [];
+  if (iu >= 0) {
+    const iname = col('name', 'title'), idesc = col('description', 'note', 'notes', 'excerpt', 'comment');
+    const ifold = col('folder', 'path', 'collection', 'category'), icreated = col('created', 'created_at', 'time_added', 'date_added', 'added', 'date');
+    for (const r of rows.slice(1)) {
+      items.push({
+        name: iname >= 0 ? r[iname] || '' : '', url: (r[iu] || '').trim(),
+        description: idesc >= 0 ? r[idesc] || '' : '', path: ifold >= 0 ? splitPath(r[ifold]) : [],
+        created: icreated >= 0 ? toSeconds(r[icreated]) : 0,
+      });
+    }
+  } else {
+    for (const r of rows) {
+      const url = r.find((x) => /^https?:\/\//i.test(x.trim()));
+      if (url) items.push({ name: r.find((x) => x.trim() && x !== url) || '', url: url.trim(), description: '', path: [], created: 0 });
+    }
+  }
+  return items.filter((i) => /^https?:/i.test(i.url));
+}
+
+function importMarkdown(text) {
+  const items = [];
+  let path = [];
+  for (const line of text.split(/\r?\n/)) {
+    const hd = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (hd) {
+      const level = hd[1].length;
+      if (level === 1) { path = []; continue; } // the document title
+      path = path.slice(0, level - 2);
+      path[level - 2] = hd[2].trim();
+      if (/^uncategori[sz]ed$/i.test(hd[2].trim()) && level === 2) path = [];
+      continue;
+    }
+    const re = /\[((?:\\.|[^\]])*)\]\((https?:\/\/[^)\s]+)\)/g;
+    let m, any = false;
+    while ((m = re.exec(line))) {
+      any = true;
+      const rest = line.slice(m.index + m[0].length);
+      const desc = /^\s*[—–-]\s*(.+)$/.exec(rest);
+      items.push({ name: m[1].replace(/\\(.)/g, '$1'), url: m[2], description: desc ? desc[1].trim() : '', path: path.filter(Boolean), created: 0 });
+    }
+    if (!any) {
+      const u = /(https?:\/\/[^\s<>()]+)/.exec(line);
+      if (u) items.push({ name: '', url: u[1], description: '', path: path.filter(Boolean), created: 0 });
+    }
+  }
+  return items;
+}
+
+function importText(text) {
+  const items = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /(https?:\/\/[^\s<>"']+)/.exec(line);
+    if (!m) continue;
+    const name = line.replace(m[1], '').replace(/^[\s\-*•|:,]+|[\s\-*•|:,]+$/g, '');
+    items.push({ name, url: m[1], description: '', path: [], created: 0 });
+  }
+  return items;
+}
+
 // ---------- settings (this browser) ----------
 
 function openSettings() {
@@ -1166,26 +1714,62 @@ function openSettings() {
   $('#settings').showModal();
 }
 
+const SEGMENTS = [['#set-theme', 'theme'], ['#set-size', 'size'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
+
 function renderSettings() {
-  for (const [id, key] of [['#set-theme', 'theme'], ['#set-size', 'size']]) {
-    for (const b of $(id).querySelectorAll('button')) {
+  for (const [id, key] of SEGMENTS) {
+    for (const b of $(id).querySelectorAll('button[data-v]')) {
       b.classList.toggle('on', b.dataset.v === prefs[key]);
       b.setAttribute('aria-pressed', String(b.dataset.v === prefs[key]));
     }
   }
+  $('#bg-image-opts').hidden = prefs.bg !== 'image';
+  $('#bg-bw').checked = !!prefs.bgBW;
+  $('#bg-strength').value = String(prefs.bgStrength);
   $('#set-newtab').checked = prefs.newTab;
 }
 
-for (const [id, key] of [['#set-theme', 'theme'], ['#set-size', 'size']]) {
+for (const [id, key] of SEGMENTS) {
   $(id).addEventListener('click', (e) => {
     const b = e.target.closest('button[data-v]');
     if (!b) return;
+    if (key === 'bg' && b.dataset.v === 'image' && !readBgImage()) { $('#bg-file').click(); return; }
     prefs[key] = b.dataset.v;
     savePrefs();
     applyPrefs();
     renderSettings();
   });
 }
+
+$('#bg-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    // Shrink the photo so it fits in browser storage.
+    const { img, done } = await loadImage(file);
+    let url;
+    try {
+      const scale = Math.min(1, 1920 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * scale);
+      c.height = Math.round(img.naturalHeight * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      url = c.toDataURL('image/jpeg', 0.78);
+    } finally { done(); }
+    try { localStorage.setItem('crumbs.bgimg', url); }
+    catch { toast('That photo is too big to keep in this browser. Try a smaller one.'); return; }
+    prefs.bg = 'image';
+    savePrefs();
+    applyPrefs();
+    renderSettings();
+  } catch {
+    toast('That file is not an image Crumbs can read.');
+  }
+});
+$('#bg-bw').addEventListener('change', (e) => { prefs.bgBW = e.target.checked; savePrefs(); applyPrefs(); });
+$('#bg-strength').addEventListener('input', (e) => { prefs.bgStrength = Number(e.target.value); savePrefs(); applyPrefs(); });
+
 $('#set-newtab').addEventListener('change', (e) => {
   prefs.newTab = e.target.checked;
   savePrefs();
@@ -1196,6 +1780,7 @@ $('#set-newtab').addEventListener('change', (e) => {
 // ---------- admin ----------
 
 let ownerName = '';
+let adminUsers = [];
 
 async function openAdmin() {
   showError('#user-error', '');
@@ -1206,24 +1791,164 @@ async function openAdmin() {
 
 async function loadUsers() {
   const data = await api('GET', '/api/users');
+  adminUsers = data.users;
   ownerName = data.owner;
   S.loginRequired = data.loginRequired;
+  S.registration = data.registration;
   $('#login-req').checked = data.loginRequired;
+  $('#registration').checked = data.registration;
   updateLoginNote();
-  $('#user-list').replaceChildren(...data.users.map((u) => h('li', { class: 'user-row' },
-    avatarEl(u, 'sm'),
+  updateRegNote();
+  $('#user-count').textContent = `· ${data.users.length}`;
+  $('#user-list').replaceChildren(...data.users.map(userRow));
+}
+
+function usageLine(u) {
+  if (u.storageLimit > 0) {
+    const pct = Math.min(100, (u.storageUsed / u.storageLimit) * 100);
+    const bar = h('span', { class: 'bar' }, h('i'));
+    bar.firstChild.style.setProperty('width', pct.toFixed(1) + '%');
+    return h('div', { class: 'usage' }, bar, `${formatBytes(u.storageUsed)} of ${formatBytes(u.storageLimit)}`);
+  }
+  return h('div', { class: 'usage' }, `${formatBytes(u.storageUsed)} used · no limit`);
+}
+
+function userRow(u) {
+  const me = u.id === S.me.id;
+  const more = h('button', {
+    type: 'button', class: 'more-btn', title: 'More', 'aria-label': `Actions for ${nameOf(u)}`,
+    'aria-haspopup': 'menu', 'aria-expanded': 'false',
+    onclick: (e) => { e.stopPropagation(); openUserMenu(u, e.currentTarget); },
+  });
+  more.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>';
+  return h('li', { class: 'user-row' + (u.blocked ? ' blocked' : '') },
+    avatarEl(u),
     h('div', { class: 'who' },
-      h('div', {}, h('strong', { text: u.username }), u.isAdmin ? h('span', { class: 'tag', text: 'admin' }) : null),
-      h('div', { class: 'muted small', text: `${u.bookmarks} crumb${u.bookmarks === 1 ? '' : 's'}${u.id === S.me.id ? ' · you' : ''}` })),
-    h('div', { class: 'row-actions' },
-      h('button', { class: 'btn small', type: 'button', text: 'Reset password', onclick: () => resetPassword(u) }),
-      u.id === S.me.id ? null : h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => deleteUser(u) })))));
+      h('div', { class: 'name' },
+        h('strong', { text: nameOf(u) }),
+        u.isAdmin ? h('span', { class: 'tag', text: 'admin' }) : null,
+        u.blocked ? h('span', { class: 'tag', text: 'blocked' }) : null,
+        me ? h('span', { class: 'tag', text: 'you' }) : null),
+      h('div', { class: 'handle', text: `@${u.username} · ${u.bookmarks} crumb${u.bookmarks === 1 ? '' : 's'}` }),
+      usageLine(u)),
+    more);
+}
+
+function openUserMenu(u, btn) {
+  const dd = $('#user-dd');
+  const wasOpen = dd.classList.contains('open') && btn.getAttribute('aria-expanded') === 'true';
+  closeMenus();
+  if (wasOpen) return;
+  const me = u.id === S.me.id;
+  const item = (label, fn) => h('button', { type: 'button', role: 'menuitem', text: label, onclick: fn });
+  $('#user-menu').replaceChildren(
+    h('div', { class: 'menu-cap', text: nameOf(u) }),
+    item('Change name', () => editUserName(u)),
+    item('Change picture', () => pickUserPicture(u)),
+    item('Storage limit…', () => setStorageLimit(u)),
+    item('Reset password', () => resetPassword(u)),
+    item('Import / export bookmarks', () => openIO(u)),
+    me ? null : h('hr'),
+    me ? null : item(u.isAdmin ? 'Remove admin rights' : 'Make admin', () => toggleAdmin(u)),
+    me ? null : item(u.blocked ? 'Unblock access' : 'Block access', () => toggleBlock(u)),
+    me ? null : item('Delete user', () => deleteUser(u)));
+  const r = btn.getBoundingClientRect();
+  const up = r.bottom + 340 > innerHeight;
+  dd.classList.toggle('up', up);
+  dd.style.setProperty('left', `${r.right}px`);
+  dd.style.setProperty('top', `${up ? r.top : r.bottom}px`);
+  dd.classList.add('open');
+  btn.setAttribute('aria-expanded', 'true');
+}
+$('#admin').addEventListener('scroll', () => closeMenus(), true);
+
+async function patchUser(u, body, msg) {
+  try {
+    const updated = await api('PATCH', `/api/users/${u.id}`, body);
+    if (u.id === S.me.id && updated) refreshMe(updated);
+    await loadUsers();
+    if (msg) toast(msg);
+    return true;
+  } catch (err) {
+    toast(err.message);
+    return false;
+  }
+}
+
+let unameUser = null;
+function editUserName(u) {
+  unameUser = u;
+  const f = $('#uname-form');
+  field(f, 'displayName').value = u.displayName || '';
+  field(f, 'username').value = u.username;
+  showError('#uname-error', '');
+  $('#uname-dlg').showModal();
+  field(f, 'displayName').focus();
+}
+$('#uname-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget;
+  try {
+    const updated = await api('PATCH', `/api/users/${unameUser.id}`, {
+      displayName: field(f, 'displayName').value, username: field(f, 'username').value.trim(),
+    });
+    if (unameUser.id === S.me.id) refreshMe(updated);
+    $('#uname-dlg').close();
+    await loadUsers();
+    toast('Name updated');
+  } catch (err) {
+    showError('#uname-error', err.message);
+  }
+});
+
+function pickUserPicture(u) {
+  $('#upic-title').textContent = `Picture for ${nameOf(u)}`;
+  $('#upic-note').textContent = (u.avatar || '').startsWith('/avatar/')
+    ? 'They uploaded their own photo. Picking something else removes it.'
+    : 'Only they can upload a photo, from their Profile.';
+  $('#upic-grid').replaceChildren(...avatarGrid(u, async (v) => {
+    if (await patchUser(u, { avatar: v }, 'Picture changed')) $('#upic-dlg').close();
+  }));
+  $('#upic-dlg').showModal();
+}
+
+async function setStorageLimit(u) {
+  const mb = await ask({
+    title: `Storage limit for ${nameOf(u)}`,
+    text: `They use ${formatBytes(u.storageUsed)} now (thumbnails, icons, photo and text). Enter a limit in MB, or 0 for no limit.`,
+    ok: 'Save limit',
+    input: { type: 'number', min: 0, step: 'any', value: u.storageLimit ? +(u.storageLimit / 1048576).toFixed(2) : 0 },
+  });
+  if (mb == null || mb === '') return;
+  const n = Number(mb);
+  if (!Number.isFinite(n) || n < 0) { toast('Enter a number of MB, or 0'); return; }
+  patchUser(u, { storageLimit: Math.round(n * 1048576) }, n ? `Limit set to ${formatBytes(Math.round(n * 1048576))}` : 'Limit removed');
+}
+
+async function toggleAdmin(u) {
+  const ok = await ask(u.isAdmin
+    ? { title: `Remove admin rights from ${nameOf(u)}?`, text: 'They keep their account and crumbs but lose the Admin menu.', ok: 'Remove admin' }
+    : { title: `Make ${nameOf(u)} an admin?`, text: 'Admins can manage every user, see the Admin menu and change who can sign in.', ok: 'Make admin' });
+  if (ok) patchUser(u, { isAdmin: !u.isAdmin }, u.isAdmin ? 'Admin rights removed' : `${nameOf(u)} is now an admin`);
+}
+
+async function toggleBlock(u) {
+  const ok = await ask(u.blocked
+    ? { title: `Unblock ${nameOf(u)}?`, text: 'They can sign in again.', ok: 'Unblock' }
+    : { title: `Block ${nameOf(u)}?`, text: "They're signed out right away and can't sign in until you unblock them. Their crumbs are kept.", ok: 'Block access' });
+  if (ok) patchUser(u, { blocked: !u.blocked }, u.blocked ? 'Access restored' : 'User blocked');
 }
 
 function updateLoginNote() {
   $('#login-note').textContent = S.loginRequired
     ? 'Everyone has to sign in with a username and password.'
     : `Login is off: anyone who can reach this Pi sees and edits ${ownerName}'s crumbs without a password. Admin and Profile still need a sign-in.`;
+}
+
+function updateRegNote() {
+  $('#reg-note').textContent = S.registration
+    ? 'Anyone who can open Crumbs can create their own account from the sign-in page.'
+    : 'Only admins can add new users (below).';
 }
 
 $('#login-req').addEventListener('change', async (e) => {
@@ -1247,12 +1972,26 @@ $('#login-req').addEventListener('change', async (e) => {
   }
 });
 
+$('#registration').addEventListener('change', async (e) => {
+  const on = e.target.checked;
+  try {
+    await api('PUT', '/api/settings', { registration: on });
+    S.registration = on;
+    updateRegNote();
+    toast(on ? 'Registration is open' : 'Registration is closed');
+  } catch (err) {
+    e.target.checked = !on;
+    toast(err.message);
+  }
+});
+
 $('#user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.currentTarget;
   try {
     await api('POST', '/api/users', {
       username: field(f, 'username').value.trim(),
+      displayName: field(f, 'displayName').value.trim(),
       password: field(f, 'password').value,
       isAdmin: field(f, 'isAdmin').checked,
     });
@@ -1266,7 +2005,7 @@ $('#user-form').addEventListener('submit', async (e) => {
 });
 
 async function resetPassword(u) {
-  const pw = await ask({ title: `New password for ${u.username}`, text: 'At least 6 characters. They will be signed out everywhere.', ok: 'Set password', input: 'password' });
+  const pw = await ask({ title: `New password for ${nameOf(u)}`, text: 'At least 6 characters. They will be signed out everywhere.', ok: 'Set password', input: 'password' });
   if (!pw) return;
   try {
     await api('PUT', `/api/users/${u.id}/password`, { password: pw });
@@ -1275,7 +2014,7 @@ async function resetPassword(u) {
 }
 
 async function deleteUser(u) {
-  const ok = await ask({ title: `Delete ${u.username}?`, text: `Their account, folders and all ${u.bookmarks} of their crumbs will be deleted. This can't be undone.`, ok: 'Delete user' });
+  const ok = await ask({ title: `Delete ${nameOf(u)}?`, text: `Their account, folders and all ${u.bookmarks} of their crumbs will be deleted. This can't be undone.`, ok: 'Delete user' });
   if (!ok) return;
   try {
     await api('DELETE', `/api/users/${u.id}`);

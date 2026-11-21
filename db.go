@@ -14,7 +14,11 @@ CREATE TABLE IF NOT EXISTS users (
   pass_hash  TEXT    NOT NULL,
   is_admin   INTEGER NOT NULL DEFAULT 0,
   avatar     TEXT    NOT NULL DEFAULT '',
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  display_name  TEXT    NOT NULL DEFAULT '',
+  blocked       INTEGER NOT NULL DEFAULT 0,
+  storage_limit INTEGER NOT NULL DEFAULT 0,
+  avatar_size   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -42,7 +46,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   thumb_ver   INTEGER NOT NULL DEFAULT 0,
   icon_ver    INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL
+  updated_at  INTEGER NOT NULL,
+  thumb_size  INTEGER NOT NULL DEFAULT 0,
+  icon_size   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, created_at DESC);
 
@@ -51,6 +57,7 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 INSERT OR IGNORE INTO settings(key, value) VALUES ('login_required', '1');
+INSERT OR IGNORE INTO settings(key, value) VALUES ('registration', '0');
 `
 
 func openDB(path string) (*sql.DB, error) {
@@ -79,9 +86,20 @@ func openDB(path string) (*sql.DB, error) {
 
 // migrate upgrades databases created by older versions of Crumbs.
 func migrate(db *sql.DB) error {
-	if !hasColumn(db, "users", "avatar") {
-		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`); err != nil {
-			return err
+	add := []struct{ table, column, def string }{
+		{"users", "avatar", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "display_name", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "blocked", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "storage_limit", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "avatar_size", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "thumb_size", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "icon_size", "INTEGER NOT NULL DEFAULT 0"},
+	}
+	for _, c := range add {
+		if !hasColumn(db, c.table, c.column) {
+			if _, err := db.Exec("ALTER TABLE " + c.table + " ADD COLUMN " + c.column + " " + c.def); err != nil {
+				return err
+			}
 		}
 	}
 	if !hasColumn(db, "bookmarks", "folder_id") {
@@ -136,6 +154,10 @@ func (a *App) loadSettings() {
 		v = "1"
 	}
 	a.loginRequired.Store(v != "0")
+	if err := a.db.QueryRow(`SELECT value FROM settings WHERE key = 'registration'`).Scan(&v); err != nil {
+		v = "0"
+	}
+	a.registration.Store(v == "1")
 }
 
 func boolInt(b bool) int {

@@ -37,7 +37,7 @@ func (a *App) handleSetAvatar(w http.ResponseWriter, r *http.Request, who *Who) 
 		jsonErr(w, http.StatusBadRequest, "unknown picture")
 		return
 	}
-	if _, err := a.db.Exec(`UPDATE users SET avatar = ? WHERE id = ?`, in.Avatar, who.ID); err != nil {
+	if _, err := a.db.Exec(`UPDATE users SET avatar = ?, avatar_size = 0 WHERE id = ?`, in.Avatar, who.ID); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -56,12 +56,18 @@ func (a *App) handleUploadAvatar(w http.ResponseWriter, r *http.Request, who *Wh
 		jsonErr(w, code, err.Error())
 		return
 	}
+	var oldSize int64
+	a.db.QueryRow(`SELECT avatar_size FROM users WHERE id = ?`, who.ID).Scan(&oldSize)
+	if err := a.checkStorage(who.ID, int64(len(data))-oldSize); err != nil {
+		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+		return
+	}
 	if err := writeFileAtomic(a.avatarPath(who.ID), data); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	ver := fmt.Sprintf("img:%d", time.Now().UnixMilli())
-	if _, err := a.db.Exec(`UPDATE users SET avatar = ? WHERE id = ?`, ver, who.ID); err != nil {
+	if _, err := a.db.Exec(`UPDATE users SET avatar = ?, avatar_size = ? WHERE id = ?`, ver, len(data), who.ID); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

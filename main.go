@@ -33,6 +33,7 @@ func main() {
 
 	app := &App{db: db, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter()}
 	app.loadSettings()
+	app.backfillSizes()
 	go app.janitor()
 
 	static, err := fs.Sub(webFS, "web")
@@ -66,6 +67,7 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("GET /api/state", a.handleState)
 	mux.HandleFunc("POST /api/setup", a.handleSetup)
 	mux.HandleFunc("POST /api/login", a.handleLogin)
+	mux.HandleFunc("POST /api/register", a.handleRegister)
 	mux.HandleFunc("POST /api/logout", a.handleLogout)
 	mux.HandleFunc("POST /api/password", a.user(a.handlePassword))
 
@@ -84,9 +86,14 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("DELETE /api/folders/{id}", a.user(a.handleDeleteFolder))
 
 	// Profile picture
+	mux.HandleFunc("PUT /api/me", a.user(a.handleUpdateMe))
 	mux.HandleFunc("PUT /api/me/avatar", a.user(a.handleSetAvatar))
 	mux.HandleFunc("PUT /api/me/avatar/image", a.user(a.handleUploadAvatar))
 	mux.HandleFunc("GET /avatar/{id}", a.user(a.handleGetAvatar))
+
+	// Import / export
+	mux.HandleFunc("GET /api/export", a.user(a.handleExportMe))
+	mux.HandleFunc("POST /api/import", a.user(a.handleImportMe))
 
 	// Link previews
 	mux.HandleFunc("GET /api/meta", a.user(a.handleMeta))
@@ -96,6 +103,9 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("GET /api/users", a.admin(a.handleListUsers))
 	mux.HandleFunc("POST /api/users", a.admin(a.handleCreateUser))
 	mux.HandleFunc("DELETE /api/users/{id}", a.admin(a.handleDeleteUser))
+	mux.HandleFunc("PATCH /api/users/{id}", a.admin(a.handlePatchUser))
+	mux.HandleFunc("GET /api/users/{id}/export", a.admin(a.handleExportUser))
+	mux.HandleFunc("POST /api/users/{id}/import", a.admin(a.handleImportUser))
 	mux.HandleFunc("PUT /api/users/{id}/password", a.admin(a.handleResetPassword))
 	mux.HandleFunc("PUT /api/settings", a.admin(a.handleSettings))
 }

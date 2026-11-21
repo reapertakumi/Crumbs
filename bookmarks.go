@@ -139,6 +139,10 @@ func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := a.checkStorage(who.ID, int64(len(in.Name)+len(in.URL)+len(in.Description))); err != nil {
+		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+		return
+	}
 	now := time.Now().Unix()
 	res, err := a.db.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, who.ID, nullID(in.FolderID), in.Name, in.URL, in.Description, now, now)
@@ -308,11 +312,19 @@ func (a *App) handlePutImage(w http.ResponseWriter, r *http.Request, who *Who) {
 		jsonErr(w, code, err.Error())
 		return
 	}
+	sizeCol := kind + "_size"
+	var oldSize int64
+	a.db.QueryRow(`SELECT `+sizeCol+` FROM bookmarks WHERE id = ?`, id).Scan(&oldSize)
+	if err := a.checkStorage(who.ID, int64(len(data))-oldSize); err != nil {
+		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+		return
+	}
 	if err := writeFileAtomic(a.imgPath(id, kind), data); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.db.Exec(`UPDATE bookmarks SET `+col+` = ? WHERE id = ? AND user_id = ?`, time.Now().UnixMilli(), id, who.ID)
+	a.db.Exec(`UPDATE bookmarks SET `+col+` = ?, `+sizeCol+` = ? WHERE id = ? AND user_id = ?`,
+		time.Now().UnixMilli(), len(data), id, who.ID)
 	b, err := a.getBookmark(who.ID, id)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
@@ -329,7 +341,7 @@ func (a *App) handleDeleteImage(w http.ResponseWriter, r *http.Request, who *Who
 		jsonErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	res, err := a.db.Exec(`UPDATE bookmarks SET `+col+` = 0 WHERE id = ? AND user_id = ?`, id, who.ID)
+	res, err := a.db.Exec(`UPDATE bookmarks SET `+col+` = 0, `+kind+`_size = 0 WHERE id = ? AND user_id = ?`, id, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return

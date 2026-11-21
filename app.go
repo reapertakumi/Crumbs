@@ -18,6 +18,7 @@ type App struct {
 	imgDir        string
 	avatarDir     string
 	loginRequired atomic.Bool
+	registration  atomic.Bool
 	setupMu       sync.Mutex
 	limiter       *limiter
 }

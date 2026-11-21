@@ -23,6 +23,9 @@
       </svg>
       <h1>Crumbs</h1>
       <p id="auth-sub" class="muted"></p>
+      <label id="auth-display" hidden>Display name <span class="muted">(optional)</span>
+        <input name="displayName" autocomplete="nickname" maxlength="50">
+      </label>
       <label>Username
         <input name="username" autocomplete="username" maxlength="32" required>
       </label>
@@ -34,6 +37,7 @@
       </label>
       <p id="auth-error" class="error" hidden></p>
       <button class="btn primary" type="submit" id="auth-submit">Sign in</button>
+      <button class="btn ghost" type="button" id="auth-switch" hidden></button>
       <button class="btn ghost" type="button" id="auth-back" hidden>Back to crumbs</button>
     </form>
   </main>
@@ -198,11 +202,24 @@
         </div>
       </div>
 
+      <form id="name-form" class="inline-form">
+        <label>Display name
+          <input name="displayName" maxlength="50" autocomplete="nickname" placeholder="Shown in the header">
+        </label>
+        <button class="btn" type="submit">Save</button>
+      </form>
+
       <h3>Profile picture</h3>
       <div class="avatar-grid" id="avatar-grid"></div>
       <div class="row wrap">
         <label class="btn small file-btn">Upload a photo<input type="file" id="avatar-file" accept="image/*" hidden></label>
-        <span class="muted small">It's cropped to a circle.</span>
+        <span class="muted small">You can move and zoom it inside the circle.</span>
+      </div>
+
+      <div class="section">
+        <h3>Your bookmarks</h3>
+        <p class="muted small">Move bookmarks in and out of Crumbs: browser bookmark files, JSON, CSV, Markdown or plain text.</p>
+        <button class="btn" type="button" data-act="io">Import / export…</button>
       </div>
 
       <form id="pw-form" class="section">
@@ -242,6 +259,33 @@
         </div>
       </div>
       <div class="setting">
+        <div class="setting-label">Layout</div>
+        <div class="seg" id="set-layout">
+          <button type="button" data-v="grid">Grid</button>
+          <button type="button" data-v="gallery">Gallery</button>
+          <button type="button" data-v="list">List</button>
+          <button type="button" data-v="compact">Compact</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="setting-label">Background</div>
+        <div class="bg-grid" id="set-bg">
+          <button type="button" data-v="plain"><span class="bg-swatch sw-plain"></span>Plain</button>
+          <button type="button" data-v="dots"><span class="bg-swatch sw-dots"></span>Dots</button>
+          <button type="button" data-v="grid"><span class="bg-swatch sw-grid"></span>Grid</button>
+          <button type="button" data-v="lines"><span class="bg-swatch sw-lines"></span>Lines</button>
+          <button type="button" data-v="paper"><span class="bg-swatch sw-paper"></span>Paper</button>
+          <button type="button" data-v="image"><span class="bg-swatch sw-image" id="bg-image-swatch"></span>Photo</button>
+        </div>
+        <div class="bg-image-opts" id="bg-image-opts" hidden>
+          <div class="row wrap">
+            <label class="btn small file-btn">Choose a photo<input type="file" id="bg-file" accept="image/*" hidden></label>
+            <label class="check"><input type="checkbox" id="bg-bw"> Black &amp; white</label>
+          </div>
+          <label class="range">Strength <input type="range" id="bg-strength" min="10" max="100" step="5"></label>
+        </div>
+      </div>
+      <div class="setting">
         <label class="switch"><input type="checkbox" id="set-newtab"> Open crumbs in a new tab</label>
       </div>
       <p class="muted small">These settings are saved in this browser only.</p>
@@ -258,18 +302,115 @@
       <h3>Access</h3>
       <label class="switch"><input type="checkbox" id="login-req"> Require login</label>
       <p class="muted small" id="login-note"></p>
+      <label class="switch"><input type="checkbox" id="registration"> Registration</label>
+      <p class="muted small" id="reg-note"></p>
       <div class="section">
-        <h3>Users</h3>
+        <h3>Users <span class="muted small" id="user-count"></span></h3>
         <ul class="user-list" id="user-list"></ul>
-        <form id="user-form">
-          <div class="grid2">
-            <label>Username<input name="username" maxlength="32" required autocomplete="off"></label>
-            <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
-          </div>
-          <label class="check"><input type="checkbox" name="isAdmin"> Make admin</label>
-          <p class="error" id="user-error" hidden></p>
-          <button class="btn" type="submit">Add user</button>
-        </form>
+        <details class="add-user">
+          <summary class="btn small">+ Add a user</summary>
+          <form id="user-form">
+            <div class="grid2">
+              <label>Username<input name="username" maxlength="32" required autocomplete="off"></label>
+              <label>Display name <span class="muted">(optional)</span><input name="displayName" maxlength="50" autocomplete="off"></label>
+              <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+            </div>
+            <label class="check"><input type="checkbox" name="isAdmin"> Make admin</label>
+            <p class="error" id="user-error" hidden></p>
+            <button class="btn" type="submit">Add user</button>
+          </form>
+        </details>
+      </div>
+    </div>
+    <!-- one shared "⋯" menu for the user rows, placed next to the clicked button -->
+    <div class="dd floating" id="user-dd"><div class="menu right" role="menu" id="user-menu"></div></div>
+  </dialog>
+
+  <!-- Admin: edit a user's names -->
+  <dialog id="uname-dlg" class="narrow">
+    <form id="uname-form" class="modal-body" novalidate>
+      <div class="modal-head">
+        <h2>Change name</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <label>Display name<input name="displayName" maxlength="50" autocomplete="off"></label>
+      <label>Username <span class="muted">(used to sign in)</span><input name="username" maxlength="32" autocomplete="off" required></label>
+      <p class="error" id="uname-error" hidden></p>
+      <div class="row"><span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Admin: pick a user's picture -->
+  <dialog id="upic-dlg" class="narrow">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2 id="upic-title">Change picture</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="avatar-grid" id="upic-grid"></div>
+      <p class="muted small" id="upic-note"></p>
+    </div>
+  </dialog>
+
+  <!-- Import / export -->
+  <dialog id="io-dlg" class="narrow">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2 id="io-title">Import &amp; export</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <h3>Export</h3>
+      <label>Format
+        <select id="io-format">
+          <option value="html">Browser bookmarks (.html) – Chrome, Firefox, Edge, Safari</option>
+          <option value="json">Crumbs backup (.json)</option>
+          <option value="csv">Spreadsheet (.csv)</option>
+          <option value="md">Markdown (.md)</option>
+          <option value="txt">Plain list of links (.txt)</option>
+        </select>
+      </label>
+      <button class="btn primary" type="button" id="io-export">Download</button>
+
+      <div class="section">
+        <h3>Import</h3>
+        <p class="muted small">Reads browser bookmark files (.html), Crumbs or Chrome .json, .csv (Pocket, Raindrop and others), Markdown links and plain text with one link per line. Folders are kept.</p>
+        <label class="check"><input type="checkbox" id="io-skip" checked> Skip links that are already saved</label>
+        <label class="btn file-btn">Choose a file…<input type="file" id="io-file" accept=".html,.htm,.json,.csv,.md,.markdown,.txt,text/*,application/json" hidden></label>
+        <p class="io-result" id="io-result" hidden></p>
+      </div>
+
+      <div class="section" id="io-previews">
+        <h3>Previews</h3>
+        <p class="muted small">Imported bookmarks have no thumbnails yet. Your browser can fetch them now.</p>
+        <button class="btn" type="button" id="io-fetch">Fetch missing previews</button>
+        <p class="muted small" id="io-fetch-status"></p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Crop a profile photo -->
+  <dialog id="crop-dlg" class="narrow">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Position your photo</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="crop-stage" id="crop-stage">
+        <img id="crop-img" alt="" draggable="false">
+        <div class="crop-ring" aria-hidden="true"></div>
+      </div>
+      <div class="crop-zoom">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M8.5 11h5M20 20l-4.5-4.5"/></svg>
+        <input type="range" id="crop-zoom" min="1" max="5" step="0.01" value="1" aria-label="Zoom">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M8.5 11h5M11 8.5v5M20 20l-4.5-4.5"/></svg>
+      </div>
+      <p class="muted small center">Drag to move. Scroll, pinch or use the slider to zoom.</p>
+      <div class="row"><span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="button" class="btn primary" id="crop-save">Use photo</button>
       </div>
     </div>
   </dialog>

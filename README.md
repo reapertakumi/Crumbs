@@ -59,12 +59,20 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   Hover a folder to collapse or expand it, add a subfolder or rename it. Bookmarks without a folder live in **Uncategorized**.
 - **Sorting.** Sort by title, date created, last updated, URL, description or folder. Click the same option again to flip
   between ascending and descending.
-- **Profile pictures.** Everyone starts with the first letter of their name. Pick one of the built-in icons or upload a photo.
+- **Profiles.** Pick a display name and a picture: the first letter of your name, one of 29 built-in icons, or your own photo,
+  which you drag and zoom into place inside a circle.
+- **Import & export.** Bring bookmarks in from any browser (bookmark .html file), Chrome or Crumbs .json, .csv (Pocket,
+  Raindrop and others), Markdown or a plain list of links. Folders are kept. Export to the same formats. Imported links
+  can fetch their thumbnails in one click.
 - **Instant search.** The small search pill in the header grows when you click it. It searches name, URL, description and folder as you type. Press `/` to jump to it.
 - **Accounts.** Usernames and passwords. The first account is the admin, and each user has their own bookmarks.
   Passwords are stored as salted PBKDF2-SHA256 hashes, never in plain text.
 - **Optional open mode.** The admin can turn login off so anyone on your network can use Crumbs without a password.
-- **Black and white.** Rounded corners, no colors. Light, dark or follow the system, plus three card sizes (Settings).
+- **Admin tools.** Open **registration** so people can sign themselves up, or keep adding users yourself. Every user has a
+  ⋯ menu: change their name or picture, set a **storage limit**, make them admin, **block** them, reset their password,
+  import/export their bookmarks or delete them.
+- **Black and white.** Rounded corners, no colors. In Settings: light, dark or system theme, three card sizes, four layouts
+  (Grid, Gallery, List, Compact) and backgrounds (plain, dots, grid, lines, paper or your own photo, black & white if you like).
 - **Lightweight.** One Go binary plus SQLite, in a `scratch` container capped at 128 MB of RAM.
 
 ## Install on a Raspberry Pi 5
@@ -114,7 +122,7 @@ To edit or delete a crumb, hover over its card (or its row in the sidebar) and c
 | Search (middle) | Click it and it grows. Press `/` to jump to it, `Esc` to clear it. |
 | **+ Add** | Add bookmark or Add folder. |
 | **Sort** | Pick a sort order. Click the active one again to flip it. |
-| Name + picture (right) | **Admin** (admins only), **Profile** (picture, password), **Settings** (theme, card size, links in new tab), **Sign out**. |
+| Name + picture (right) | **Admin** (admins only), **Profile** (name, picture, password), **Import / export**, **Settings** (theme, size, layout, background), **Sign out**. |
 
 Deleting a folder never deletes bookmarks: its bookmarks and subfolders move up one level.
 
@@ -193,7 +201,9 @@ admin, stop Crumbs, move `data/crumbs.db` somewhere safe, and start again to get
 ```text
 main.go          server setup and routes
 app.go           middleware, auth helpers, login rate limit
-auth.go          accounts, password hashing, sessions, admin API
+auth.go          sign-in, registration, password hashing, sessions
+users.go         admin user management, storage limits, blocking
+transfer.go      import / export
 bookmarks.go     bookmark CRUD and image storage
 folders.go       nested folders
 profile.go       profile pictures
@@ -214,6 +224,10 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `GET` `POST` | `/api/bookmarks` | List / create |
 | `PUT` `DELETE` | `/api/bookmarks/{id}` | Update / delete |
 | `PUT` `DELETE` | `/api/bookmarks/{id}/thumb` · `/icon` | Upload / remove an image (raw JPEG/PNG body) |
+| `POST` | `/api/register` | Create an account (only while registration is open) |
+| `PUT` | `/api/me` | Change your display name `{"displayName"}` |
+| `GET` | `/api/export` | Your folders and bookmarks as JSON |
+| `POST` | `/api/import` | Add many bookmarks `{"items":[{"name","url","description","path":["Folder","Sub"]}],"skipDuplicates":true}` |
 | `POST` | `/api/folders` | Create a folder `{"name", "parentId"}` |
 | `PUT` `DELETE` | `/api/folders/{id}` | Rename or move / delete (contents move up one level) |
 | `PUT` | `/api/me/avatar` | `{"avatar": "" | "icon:cat"}` |
@@ -222,8 +236,10 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `GET` | `/api/fetch?url=` | Image relay used by the browser |
 | `GET` `POST` | `/api/users` | Admin: list / add users |
 | `DELETE` | `/api/users/{id}` | Admin: delete a user |
+| `PATCH` | `/api/users/{id}` | Admin: any of `displayName`, `username`, `avatar`, `isAdmin`, `blocked`, `storageLimit` (bytes, 0 = no limit) |
+| `GET` `POST` | `/api/users/{id}/export` · `/import` | Admin: export / import someone's bookmarks |
 | `PUT` | `/api/users/{id}/password` | Admin: reset a password |
-| `PUT` | `/api/settings` | Admin: `{"loginRequired": true\|false}` |
+| `PUT` | `/api/settings` | Admin: `{"loginRequired": true\|false, "registration": true\|false}` |
 
 ---
 
