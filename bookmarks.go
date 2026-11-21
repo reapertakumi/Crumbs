@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
@@ -14,25 +15,30 @@ import (
 
 type Bookmark struct {
 	ID          int64  `json:"id"`
+	FolderID    *int64 `json:"folderId"`
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	Description string `json:"description"`
-	Folder      string `json:"folder"`
 	Thumb       string `json:"thumb"`
 	Icon        string `json:"icon"`
 	Created     int64  `json:"created"`
 	Updated     int64  `json:"updated"`
 }
 
-const bmCols = `id, name, url, description, folder, thumb_ver, icon_ver, created_at, updated_at`
+const bmCols = `id, folder_id, name, url, description, thumb_ver, icon_ver, created_at, updated_at`
 
 type scanner interface{ Scan(dest ...any) error }
 
 func scanBookmark(s scanner) (*Bookmark, error) {
 	var b Bookmark
+	var folder sql.NullInt64
 	var tv, iv int64
-	if err := s.Scan(&b.ID, &b.Name, &b.URL, &b.Description, &b.Folder, &tv, &iv, &b.Created, &b.Updated); err != nil {
+	if err := s.Scan(&b.ID, &folder, &b.Name, &b.URL, &b.Description, &tv, &iv, &b.Created, &b.Updated); err != nil {
 		return nil, err
+	}
+	if folder.Valid {
+		f := folder.Int64
+		b.FolderID = &f
 	}
 	if tv > 0 {
 		b.Thumb = fmt.Sprintf("/img/%d/thumb?v=%d", b.ID, tv)
@@ -51,10 +57,10 @@ type bookmarkIn struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
 	Description string `json:"description"`
-	Folder      string `json:"folder"`
+	FolderID    *int64 `json:"folderId"`
 }
 
-func (in *bookmarkIn) clean() error {
+func (a *App) cleanBookmark(uid int64, in *bookmarkIn) error {
 	u, err := parseHTTPURL(in.URL)
 	if err != nil {
 		return err
@@ -65,7 +71,9 @@ func (in *bookmarkIn) clean() error {
 		in.Name = strings.TrimPrefix(u.Hostname(), "www.")
 	}
 	in.Description = clip(strings.TrimSpace(in.Description), 2000)
-	in.Folder = clip(oneLine(in.Folder), 100)
+	if in.FolderID != nil && !a.folderOwned(uid, *in.FolderID) {
+		return errors.New("that folder does not exist")
+	}
 	return nil
 }
 
@@ -102,17 +110,23 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	defer rows.Close()
 	list := []*Bookmark{}
 	for rows.Next() {
 		b, err := scanBookmark(rows)
 		if err != nil {
+			rows.Close()
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		list = append(list, b)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list})
+	rows.Close()
+	folders, err := a.listFolders(who.ID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "folders": folders})
 }
 
 func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
@@ -121,13 +135,13 @@ func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	if err := in.clean(); err != nil {
+	if err := a.cleanBookmark(who.ID, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	now := time.Now().Unix()
-	res, err := a.db.Exec(`INSERT INTO bookmarks(user_id, name, url, description, folder, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, who.ID, in.Name, in.URL, in.Description, in.Folder, now, now)
+	res, err := a.db.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, who.ID, nullID(in.FolderID), in.Name, in.URL, in.Description, now, now)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -152,12 +166,12 @@ func (a *App) handleUpdateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	if err := in.clean(); err != nil {
+	if err := a.cleanBookmark(who.ID, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	res, err := a.db.Exec(`UPDATE bookmarks SET name = ?, url = ?, description = ?, folder = ?, updated_at = ?
-		WHERE id = ? AND user_id = ?`, in.Name, in.URL, in.Description, in.Folder, time.Now().Unix(), id, who.ID)
+	res, err := a.db.Exec(`UPDATE bookmarks SET folder_id = ?, name = ?, url = ?, description = ?, updated_at = ?
+		WHERE id = ? AND user_id = ?`, nullID(in.FolderID), in.Name, in.URL, in.Description, time.Now().Unix(), id, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -219,6 +233,64 @@ func (a *App) removeImages(ids ...int64) {
 	}
 }
 
+// readImageUpload reads a request body and accepts only JPEG, PNG or WebP.
+func readImageUpload(w http.ResponseWriter, r *http.Request, max int64) ([]byte, int, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, max)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, http.StatusRequestEntityTooLarge, fmt.Errorf("image is too large (max %d MB)", max>>20)
+	}
+	switch http.DetectContentType(data) {
+	case "image/jpeg", "image/png", "image/webp":
+		return data, 0, nil
+	}
+	return nil, http.StatusUnsupportedMediaType, errors.New("only JPEG, PNG or WebP images")
+}
+
+// writeFileAtomic writes to a temp file next to dst and renames it into place.
+func writeFileAtomic(dst string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".upload-*")
+	if err != nil {
+		return err
+	}
+	_, werr := tmp.Write(data)
+	cerr := tmp.Close()
+	if werr != nil || cerr != nil {
+		os.Remove(tmp.Name())
+		return errors.New("could not save image")
+	}
+	if err := os.Rename(tmp.Name(), dst); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	return nil
+}
+
+// serveImageFile serves a stored image. URLs carry a version (?v=...), so
+// the browser may cache them forever.
+func serveImageFile(w http.ResponseWriter, r *http.Request, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "read error", http.StatusInternalServerError)
+		return
+	}
+	st, err := f.Stat()
+	if err != nil {
+		http.Error(w, "read error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", http.DetectContentType(head[:n]))
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	http.ServeContent(w, r, "", st.ModTime(), f)
+}
+
 func (a *App) handlePutImage(w http.ResponseWriter, r *http.Request, who *Who) {
 	id, err := pathID(r)
 	kind := r.PathValue("kind")
@@ -231,33 +303,13 @@ func (a *App) handlePutImage(w http.ResponseWriter, r *http.Request, who *Who) {
 		jsonErr(w, http.StatusNotFound, "no such bookmark")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 3<<20)
-	data, err := io.ReadAll(r.Body)
+	data, code, err := readImageUpload(w, r, 3<<20)
 	if err != nil {
-		jsonErr(w, http.StatusRequestEntityTooLarge, "image is too large (max 3 MB)")
+		jsonErr(w, code, err.Error())
 		return
 	}
-	switch http.DetectContentType(data) {
-	case "image/jpeg", "image/png", "image/webp":
-	default:
-		jsonErr(w, http.StatusUnsupportedMediaType, "only JPEG, PNG or WebP images")
-		return
-	}
-	tmp, err := os.CreateTemp(a.imgDir, ".upload-*")
-	if err != nil {
+	if err := writeFileAtomic(a.imgPath(id, kind), data); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	_, werr := tmp.Write(data)
-	cerr := tmp.Close()
-	if werr != nil || cerr != nil {
-		os.Remove(tmp.Name())
-		jsonErr(w, http.StatusInternalServerError, "could not save image")
-		return
-	}
-	if err := os.Rename(tmp.Name(), a.imgPath(id, kind)); err != nil {
-		os.Remove(tmp.Name())
-		jsonErr(w, http.StatusInternalServerError, "could not save image")
 		return
 	}
 	a.db.Exec(`UPDATE bookmarks SET `+col+` = ? WHERE id = ? AND user_id = ?`, time.Now().UnixMilli(), id, who.ID)
@@ -303,25 +355,5 @@ func (a *App) handleGetImage(w http.ResponseWriter, r *http.Request, who *Who) {
 		http.NotFound(w, r)
 		return
 	}
-	f, err := os.Open(a.imgPath(id, kind))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer f.Close()
-	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head)
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-	st, err := f.Stat()
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", http.DetectContentType(head[:n]))
-	// URLs carry a version (?v=...), so the browser may cache them forever.
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	http.ServeContent(w, r, "", st.ModTime(), f)
+	serveImageFile(w, r, a.imgPath(id, kind))
 }

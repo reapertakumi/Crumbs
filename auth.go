@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,6 +28,29 @@ type User struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	IsAdmin  bool   `json:"isAdmin"`
+	// Avatar is "" (first letter), "icon:<name>" or an image URL.
+	Avatar string `json:"avatar"`
+}
+
+const userCols = `id, username, is_admin, avatar`
+
+func scanUser(s scanner) (*User, error) {
+	var u User
+	var admin int
+	var av string
+	if err := s.Scan(&u.ID, &u.Username, &admin, &av); err != nil {
+		return nil, err
+	}
+	u.IsAdmin = admin == 1
+	u.Avatar = avatarURL(u.ID, av)
+	return &u, nil
+}
+
+func avatarURL(id int64, stored string) string {
+	if v, ok := strings.CutPrefix(stored, "img:"); ok {
+		return fmt.Sprintf("/avatar/%d?v=%s", id, v)
+	}
+	return stored
 }
 
 var (
@@ -115,15 +139,11 @@ func (a *App) userCount() int {
 
 // ownerUser is the first admin. Guests use this account when login is off.
 func (a *App) ownerUser() *User {
-	var u User
-	var admin int
-	err := a.db.QueryRow(`SELECT id, username, is_admin FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1`).
-		Scan(&u.ID, &u.Username, &admin)
+	u, err := scanUser(a.db.QueryRow(`SELECT ` + userCols + ` FROM users WHERE is_admin = 1 ORDER BY id LIMIT 1`))
 	if err != nil {
 		return nil
 	}
-	u.IsAdmin = admin == 1
-	return &u
+	return u
 }
 
 // ---- sessions ----
@@ -155,18 +175,22 @@ func (a *App) startSession(w http.ResponseWriter, r *http.Request, uid int64) er
 }
 
 func (a *App) sessionUser(token string) *User {
-	var u User
-	var admin int
-	err := a.db.QueryRow(`
-		SELECT u.id, u.username, u.is_admin
+	u, err := scanUser(a.db.QueryRow(`
+		SELECT u.id, u.username, u.is_admin, u.avatar
 		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash(token), time.Now().Unix()).
-		Scan(&u.ID, &u.Username, &admin)
+		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash(token), time.Now().Unix()))
 	if err != nil {
 		return nil
 	}
-	u.IsAdmin = admin == 1
-	return &u
+	return u
+}
+
+func (a *App) getUser(id int64) *User {
+	u, err := scanUser(a.db.QueryRow(`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+	if err != nil {
+		return nil
+	}
+	return u
 }
 
 // ---- handlers ----
@@ -305,14 +329,13 @@ func (a *App) handlePassword(w http.ResponseWriter, r *http.Request, who *Who) {
 
 func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request, who *Who) {
 	rows, err := a.db.Query(`
-		SELECT u.id, u.username, u.is_admin, u.created_at,
+		SELECT u.id, u.username, u.is_admin, u.avatar, u.created_at,
 		       (SELECT COUNT(*) FROM bookmarks b WHERE b.user_id = u.id)
 		FROM users u ORDER BY u.id`)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	defer rows.Close()
 	type adminUser struct {
 		User
 		Created   int64 `json:"created"`
@@ -322,13 +345,17 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request, who *Who) 
 	for rows.Next() {
 		var u adminUser
 		var admin int
-		if err := rows.Scan(&u.ID, &u.Username, &admin, &u.Created, &u.Bookmarks); err != nil {
+		var av string
+		if err := rows.Scan(&u.ID, &u.Username, &admin, &av, &u.Created, &u.Bookmarks); err != nil {
+			rows.Close()
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		u.IsAdmin = admin == 1
+		u.Avatar = avatarURL(u.ID, av)
 		users = append(users, u)
 	}
+	rows.Close()
 	owner := ""
 	if o := a.ownerUser(); o != nil {
 		owner = o.Username
@@ -391,6 +418,7 @@ func (a *App) handleDeleteUser(w http.ResponseWriter, r *http.Request, who *Who)
 		return
 	}
 	a.removeImages(ids...)
+	os.Remove(a.avatarPath(id))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

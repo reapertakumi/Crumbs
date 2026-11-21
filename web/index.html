@@ -7,6 +7,7 @@
   <title>Crumbs</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -14,7 +15,12 @@
   <!-- Sign in / first-run setup -->
   <main id="auth" class="auth" hidden>
     <form id="auth-form" class="auth-card" autocomplete="on">
-      <img src="/icon.svg" alt="" class="auth-logo">
+      <svg class="logo auth-logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs><mask id="bite-a"><rect width="64" height="64" fill="#fff"/><circle cx="50" cy="13" r="9" fill="#000"/><circle cx="57" cy="25" r="6" fill="#000"/><circle cx="40" cy="6" r="6" fill="#000"/></mask></defs>
+        <circle class="lg-c" cx="29" cy="33" r="24" mask="url(#bite-a)"/>
+        <g class="lg-h"><circle cx="20" cy="24" r="3.4"/><circle cx="33" cy="41" r="3.8"/><circle cx="18" cy="42" r="2.6"/><circle cx="37" cy="26" r="2.5"/><circle cx="27" cy="33" r="1.9"/></g>
+        <g class="lg-c"><rect x="52" y="39" width="5.5" height="5.5" rx="1.3" transform="rotate(22 54.75 41.75)"/><rect x="56" y="50" width="4.2" height="4.2" rx="1" transform="rotate(-18 58.1 52.1)"/><rect x="47.5" y="55" width="3.2" height="3.2" rx=".8" transform="rotate(35 49.1 56.6)"/></g>
+      </svg>
       <h1>Crumbs</h1>
       <p id="auth-sub" class="muted"></p>
       <label>Username
@@ -34,32 +40,87 @@
 
   <!-- The app -->
   <div id="app" hidden>
-    <header class="top">
-      <a class="brand" href="/"><img src="/icon.svg" alt=""><span>Crumbs</span></a>
-      <div class="search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input id="q" type="search" placeholder="Search crumbs…" autocomplete="off" aria-label="Search bookmarks">
-      </div>
-      <div class="top-right">
-        <button class="btn primary" type="button" id="add-btn">+ Add</button>
-        <span class="who" id="who"></span>
-        <button class="icon-btn" type="button" id="settings-btn" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    <header class="top" id="top">
+      <div class="top-left">
+        <button class="icon-btn" type="button" id="menu-btn" aria-label="Show folders" aria-controls="sidebar" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
-        <button class="btn ghost" type="button" id="signout-btn">Sign out</button>
-        <button class="btn" type="button" id="signin-btn">Sign in</button>
+        <a class="brand" href="/">
+          <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+            <defs><mask id="bite-b"><rect width="64" height="64" fill="#fff"/><circle cx="50" cy="13" r="9" fill="#000"/><circle cx="57" cy="25" r="6" fill="#000"/><circle cx="40" cy="6" r="6" fill="#000"/></mask></defs>
+            <circle class="lg-c" cx="29" cy="33" r="24" mask="url(#bite-b)"/>
+            <g class="lg-h"><circle cx="20" cy="24" r="3.4"/><circle cx="33" cy="41" r="3.8"/><circle cx="18" cy="42" r="2.6"/><circle cx="37" cy="26" r="2.5"/><circle cx="27" cy="33" r="1.9"/></g>
+            <g class="lg-c"><rect x="52" y="39" width="5.5" height="5.5" rx="1.3" transform="rotate(22 54.75 41.75)"/><rect x="56" y="50" width="4.2" height="4.2" rx="1" transform="rotate(-18 58.1 52.1)"/><rect x="47.5" y="55" width="3.2" height="3.2" rx=".8" transform="rotate(35 49.1 56.6)"/></g>
+          </svg>
+          <span>Crumbs</span>
+        </a>
+      </div>
+
+      <div class="search" id="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search crumbs..." autocomplete="off" aria-label="Search crumbs">
+      </div>
+
+      <div class="top-right">
+        <div class="dd" id="add-dd">
+          <button class="btn primary" type="button" data-dd aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">Add</span>
+          </button>
+          <div class="menu" role="menu">
+            <button type="button" role="menuitem" data-act="add-bookmark">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z"/></svg>Add bookmark</button>
+            <button type="button" role="menuitem" data-act="add-folder">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg>Add folder</button>
+          </div>
+        </div>
+
+        <div class="dd" id="sort-dd">
+          <button class="btn" type="button" data-dd aria-haspopup="menu" aria-expanded="false" id="sort-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg><span class="lbl">Sort</span>
+          </button>
+          <div class="menu right" role="menu" id="sort-menu"></div>
+        </div>
+
+        <div class="dd" id="me-dd">
+          <button class="me-btn" type="button" data-dd aria-haspopup="menu" aria-expanded="false">
+            <span class="me-name" id="me-name"></span>
+            <span class="avatar" id="me-avatar"></span>
+          </button>
+          <div class="menu right" role="menu" id="me-menu"></div>
+        </div>
       </div>
     </header>
-    <nav id="folders" class="folders" aria-label="Folders"></nav>
-    <section id="grid" class="grid" aria-live="polite"></section>
-    <p id="empty" class="empty" hidden></p>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="sidebar" id="sidebar" aria-label="Folders">
+      <div class="side-actions">
+        <button class="btn small" type="button" data-act="add-bookmark">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add tab</button>
+        <button class="btn small" type="button" data-act="add-folder">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add folder</button>
+      </div>
+      <nav class="tree" id="tree"></nav>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="view-head">
+        <h2 id="view-title">All crumbs</h2>
+        <span class="muted" id="view-count"></span>
+        <button class="chip-x" type="button" id="view-clear" hidden aria-label="Show all crumbs">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <section id="grid" class="grid"></section>
+      <p id="empty" class="empty" hidden></p>
+    </main>
   </div>
 
   <!-- Add / edit a bookmark -->
   <dialog id="edit">
     <form id="edit-form" class="modal-body" novalidate>
       <div class="modal-head">
-        <h2 id="edit-title">Add crumb</h2>
+        <h2 id="edit-title">Add bookmark</h2>
         <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
 
@@ -86,9 +147,8 @@
         <textarea name="description" rows="3" maxlength="2000" placeholder="Optional"></textarea>
       </label>
       <label>Folder
-        <input name="folder" list="folder-list" maxlength="100" placeholder="No folder" autocomplete="off">
+        <select name="folder" id="edit-folder"></select>
       </label>
-      <datalist id="folder-list"></datalist>
 
       <p class="error" id="edit-error" hidden></p>
       <div class="row">
@@ -100,15 +160,52 @@
     </form>
   </dialog>
 
-  <!-- Settings -->
-  <dialog id="settings">
-    <div class="modal-body">
+  <!-- Add / edit a folder -->
+  <dialog id="folder-dlg" class="narrow">
+    <form id="folder-form" class="modal-body" novalidate>
       <div class="modal-head">
-        <h2>Settings</h2>
+        <h2 id="folder-title">Add folder</h2>
         <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
+      <label>Name
+        <input name="name" maxlength="100" autocomplete="off" required>
+      </label>
+      <label>Inside
+        <select name="parent" id="folder-parent"></select>
+      </label>
+      <p class="error" id="folder-error" hidden></p>
+      <div class="row">
+        <button type="button" class="btn" id="folder-delete" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="folder-save">Save</button>
+      </div>
+    </form>
+  </dialog>
 
-      <form id="pw-form">
+  <!-- Profile -->
+  <dialog id="profile">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Profile</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="profile-card">
+        <span class="avatar xl" id="profile-avatar"></span>
+        <div>
+          <div class="profile-name" id="profile-name"></div>
+          <div class="muted small" id="profile-role"></div>
+        </div>
+      </div>
+
+      <h3>Profile picture</h3>
+      <div class="avatar-grid" id="avatar-grid"></div>
+      <div class="row wrap">
+        <label class="btn small file-btn">Upload a photo<input type="file" id="avatar-file" accept="image/*" hidden></label>
+        <span class="muted small">It's cropped to a circle.</span>
+      </div>
+
+      <form id="pw-form" class="section">
         <h3>Change password</h3>
         <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
         <div class="grid2">
@@ -118,26 +215,61 @@
         <p class="error" id="pw-error" hidden></p>
         <button class="btn" type="submit">Update password</button>
       </form>
+    </div>
+  </dialog>
 
-      <div id="admin-sec" hidden>
-        <div class="section">
-          <h3>Access</h3>
-          <label class="switch"><input type="checkbox" id="login-req"> Require login</label>
-          <p class="muted small" id="login-note"></p>
+  <!-- Settings (saved in this browser) -->
+  <dialog id="settings" class="narrow">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="setting">
+        <div class="setting-label">Theme</div>
+        <div class="seg" id="set-theme">
+          <button type="button" data-v="system">System</button>
+          <button type="button" data-v="light">Light</button>
+          <button type="button" data-v="dark">Dark</button>
         </div>
-        <div class="section">
-          <h3>Users</h3>
-          <ul class="user-list" id="user-list"></ul>
-          <form id="user-form">
-            <div class="grid2">
-              <label>Username<input name="username" maxlength="32" required autocomplete="off"></label>
-              <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
-            </div>
-            <label class="check"><input type="checkbox" name="isAdmin"> Make admin</label>
-            <p class="error" id="user-error" hidden></p>
-            <button class="btn" type="submit">Add user</button>
-          </form>
+      </div>
+      <div class="setting">
+        <div class="setting-label">Card size</div>
+        <div class="seg" id="set-size">
+          <button type="button" data-v="s">Small</button>
+          <button type="button" data-v="m">Medium</button>
+          <button type="button" data-v="l">Large</button>
         </div>
+      </div>
+      <div class="setting">
+        <label class="switch"><input type="checkbox" id="set-newtab"> Open crumbs in a new tab</label>
+      </div>
+      <p class="muted small">These settings are saved in this browser only.</p>
+    </div>
+  </dialog>
+
+  <!-- Admin -->
+  <dialog id="admin">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Admin</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <h3>Access</h3>
+      <label class="switch"><input type="checkbox" id="login-req"> Require login</label>
+      <p class="muted small" id="login-note"></p>
+      <div class="section">
+        <h3>Users</h3>
+        <ul class="user-list" id="user-list"></ul>
+        <form id="user-form">
+          <div class="grid2">
+            <label>Username<input name="username" maxlength="32" required autocomplete="off"></label>
+            <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+          </div>
+          <label class="check"><input type="checkbox" name="isAdmin"> Make admin</label>
+          <p class="error" id="user-error" hidden></p>
+          <button class="btn" type="submit">Add user</button>
+        </form>
       </div>
     </div>
   </dialog>

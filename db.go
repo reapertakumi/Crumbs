@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"time"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite, no CGO needed on the Pi
 )
@@ -12,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   username   TEXT    NOT NULL UNIQUE COLLATE NOCASE,
   pass_hash  TEXT    NOT NULL,
   is_admin   INTEGER NOT NULL DEFAULT 0,
+  avatar     TEXT    NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 
@@ -21,13 +23,22 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS folders (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_id  INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+  name       TEXT    NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
+
 CREATE TABLE IF NOT EXISTS bookmarks (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  folder_id   INTEGER REFERENCES folders(id) ON DELETE SET NULL,
   name        TEXT    NOT NULL,
   url         TEXT    NOT NULL,
   description TEXT    NOT NULL DEFAULT '',
-  folder      TEXT    NOT NULL DEFAULT '',
   thumb_ver   INTEGER NOT NULL DEFAULT 0,
   icon_ver    INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL,
@@ -53,12 +64,70 @@ func openDB(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	// One connection is plenty for a home server and avoids SQLITE_BUSY.
+	// Never run a query while iterating rows from another one.
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, err
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return db, nil
+}
+
+// migrate upgrades databases created by older versions of Crumbs.
+func migrate(db *sql.DB) error {
+	if !hasColumn(db, "users", "avatar") {
+		if _, err := db.Exec(`ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	if !hasColumn(db, "bookmarks", "folder_id") {
+		if _, err := db.Exec(`ALTER TABLE bookmarks ADD COLUMN folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL`); err != nil {
+			return err
+		}
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_bookmarks_folder ON bookmarks(folder_id)`); err != nil {
+		return err
+	}
+	// v1 stored the folder as plain text on each bookmark. Turn those into real folders.
+	if hasColumn(db, "bookmarks", "folder") {
+		type pair struct {
+			uid  int64
+			name string
+		}
+		var pairs []pair
+		rows, err := db.Query(`SELECT DISTINCT user_id, folder FROM bookmarks WHERE folder <> '' AND folder_id IS NULL`)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var p pair
+			if rows.Scan(&p.uid, &p.name) == nil {
+				pairs = append(pairs, p)
+			}
+		}
+		rows.Close()
+		for _, p := range pairs {
+			res, err := db.Exec(`INSERT INTO folders(user_id, name, created_at) VALUES (?, ?, ?)`, p.uid, p.name, time.Now().Unix())
+			if err != nil {
+				return err
+			}
+			fid, _ := res.LastInsertId()
+			if _, err := db.Exec(`UPDATE bookmarks SET folder_id = ?, folder = '' WHERE user_id = ? AND folder = ?`, fid, p.uid, p.name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func hasColumn(db *sql.DB, table, column string) bool {
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n)
+	return n > 0
 }
 
 func (a *App) loadSettings() {

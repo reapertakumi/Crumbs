@@ -19,8 +19,11 @@ func main() {
 	addr := envOr("ADDR", ":9099")
 
 	imgDir := filepath.Join(dataDir, "img")
-	if err := os.MkdirAll(imgDir, 0o755); err != nil {
-		log.Fatalf("create data dir: %v", err)
+	avatarDir := filepath.Join(dataDir, "avatars")
+	for _, d := range []string{imgDir, avatarDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			log.Fatalf("create data dir: %v", err)
+		}
 	}
 
 	db, err := openDB(filepath.Join(dataDir, "crumbs.db"))
@@ -28,7 +31,7 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 
-	app := &App{db: db, imgDir: imgDir, limiter: newLimiter()}
+	app := &App{db: db, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter()}
 	app.loadSettings()
 	go app.janitor()
 
@@ -74,6 +77,16 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("PUT /api/bookmarks/{id}/{kind}", a.user(a.handlePutImage))
 	mux.HandleFunc("DELETE /api/bookmarks/{id}/{kind}", a.user(a.handleDeleteImage))
 	mux.HandleFunc("GET /img/{id}/{kind}", a.user(a.handleGetImage))
+
+	// Folders (nested)
+	mux.HandleFunc("POST /api/folders", a.user(a.handleCreateFolder))
+	mux.HandleFunc("PUT /api/folders/{id}", a.user(a.handleUpdateFolder))
+	mux.HandleFunc("DELETE /api/folders/{id}", a.user(a.handleDeleteFolder))
+
+	// Profile picture
+	mux.HandleFunc("PUT /api/me/avatar", a.user(a.handleSetAvatar))
+	mux.HandleFunc("PUT /api/me/avatar/image", a.user(a.handleUploadAvatar))
+	mux.HandleFunc("GET /avatar/{id}", a.user(a.handleGetAvatar))
 
 	// Link previews
 	mux.HandleFunc("GET /api/meta", a.user(a.handleMeta))

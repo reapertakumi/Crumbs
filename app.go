@@ -16,6 +16,7 @@ import (
 type App struct {
 	db            *sql.DB
 	imgDir        string
+	avatarDir     string
 	loginRequired atomic.Bool
 	setupMu       sync.Mutex
 	limiter       *limiter

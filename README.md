@@ -55,12 +55,16 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
 - **Thumbnails are made in your browser.** Your browser downloads and resizes the images, then stores
   them on the Pi. Thumbnails always load from the Pi, never from the original site.
 - **Your own images.** You can upload, paste (Ctrl+V) or drag in any image, for example a screenshot.
-- **Folders.** Give a bookmark a folder and filter by it with one click.
-- **Instant search.** Searches name, URL, description and folder as you type. Press `/` to jump to it.
+- **Folders and subfolders.** The sidebar (the ☰ button) shows every folder as a tree with its bookmarks inside.
+  Hover a folder to collapse or expand it, add a subfolder or rename it. Bookmarks without a folder live in **Uncategorized**.
+- **Sorting.** Sort by title, date created, last updated, URL, description or folder. Click the same option again to flip
+  between ascending and descending.
+- **Profile pictures.** Everyone starts with the first letter of their name. Pick one of the built-in icons or upload a photo.
+- **Instant search.** The small search pill in the header grows when you click it. It searches name, URL, description and folder as you type. Press `/` to jump to it.
 - **Accounts.** Usernames and passwords. The first account is the admin, and each user has their own bookmarks.
   Passwords are stored as salted PBKDF2-SHA256 hashes, never in plain text.
 - **Optional open mode.** The admin can turn login off so anyone on your network can use Crumbs without a password.
-- **Black and white.** Rounded corners, no colors, and an automatic dark mode.
+- **Black and white.** Rounded corners, no colors. Light, dark or follow the system, plus three card sizes (Settings).
 - **Lightweight.** One Go binary plus SQLite, in a `scratch` container capped at 128 MB of RAM.
 
 ## Install on a Raspberry Pi 5
@@ -90,17 +94,29 @@ Now open **`http://<your-pi-ip>:9099`** in any browser on your network, for exam
 ### First start
 
 The first visit shows a **Welcome** screen. The account you create there is the **admin**.
-There is no public sign-up: the admin adds everyone else under **Settings → Users**.
+There is no public sign-up: the admin adds everyone else under **profile picture → Admin → Users**.
 
 ### Adding a crumb
 
-1. Click **+ Add**.
+1. Click **+ Add → Add bookmark** (or **Add tab** in the sidebar).
 2. Paste a URL. Crumbs fetches the title, description, favicon and preview image.
-3. Change the name or description if you want, and pick a folder (or type a new one).
+3. Change the name or description if you want, and pick a folder (or **+ New folder…**).
 4. No good preview? Click **Upload image**, or paste or drop a screenshot onto the preview.
 5. **Save**.
 
-To edit or delete a crumb, hover over its card and click the pencil. On phones the pencil is always visible.
+To edit or delete a crumb, hover over its card (or its row in the sidebar) and click the pencil. On phones the pencil is always visible.
+
+### The header
+
+| Where | What |
+| ----- | ---- |
+| ☰ + logo (left) | Opens the folder sidebar. On wide screens it stays open next to the grid. |
+| Search (middle) | Click it and it grows. Press `/` to jump to it, `Esc` to clear it. |
+| **+ Add** | Add bookmark or Add folder. |
+| **Sort** | Pick a sort order. Click the active one again to flip it. |
+| Name + picture (right) | **Admin** (admins only), **Profile** (picture, password), **Settings** (theme, card size, links in new tab), **Sign out**. |
+
+Deleting a folder never deletes bookmarks: its bookmarks and subfolders move up one level.
 
 ### Bookmarklet (save the page you're on with one click)
 
@@ -115,9 +131,9 @@ Click it on any page and Crumbs opens with that link already filled in.
 
 ### Turning login off
 
-Signed in as admin, open **Settings** and switch off **Require login**. Anyone who can reach the Pi
+Signed in as admin, open **profile picture → Admin** and switch off **Require login**. Anyone who can reach the Pi
 can then use Crumbs without a password. They see and edit the **first admin's** bookmarks.
-Settings and user management still need a real sign-in, which is always available from the **Sign in** button.
+Admin and Profile still need a real sign-in, which is always available from the **Sign in** button.
 
 > Only turn login off on a network you trust. Never expose port 9099 to the internet without login.
 
@@ -149,7 +165,8 @@ Everything lives in the `./data` folder next to `docker-compose.yml`:
 
 ```text
 data/
-├── crumbs.db      # SQLite database: users, sessions, bookmarks, settings
+├── crumbs.db      # SQLite database: users, sessions, folders, bookmarks, settings
+├── avatars/       # uploaded profile pictures
 └── img/           # thumbnails and favicons
 ```
 
@@ -178,6 +195,8 @@ main.go          server setup and routes
 app.go           middleware, auth helpers, login rate limit
 auth.go          accounts, password hashing, sessions, admin API
 bookmarks.go     bookmark CRUD and image storage
+folders.go       nested folders
+profile.go       profile pictures
 meta.go          title, favicon and preview lookup, YouTube, image relay
 db.go            SQLite schema
 web/             the front end (plain HTML, CSS and JS, embedded into the binary)
@@ -195,6 +214,10 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `GET` `POST` | `/api/bookmarks` | List / create |
 | `PUT` `DELETE` | `/api/bookmarks/{id}` | Update / delete |
 | `PUT` `DELETE` | `/api/bookmarks/{id}/thumb` · `/icon` | Upload / remove an image (raw JPEG/PNG body) |
+| `POST` | `/api/folders` | Create a folder `{"name", "parentId"}` |
+| `PUT` `DELETE` | `/api/folders/{id}` | Rename or move / delete (contents move up one level) |
+| `PUT` | `/api/me/avatar` | `{"avatar": "" | "icon:cat"}` |
+| `PUT` | `/api/me/avatar/image` | Upload a profile photo (raw JPEG/PNG body) |
 | `GET` | `/api/meta?url=` | Title, description, image and icon candidates |
 | `GET` | `/api/fetch?url=` | Image relay used by the browser |
 | `GET` `POST` | `/api/users` | Admin: list / add users |
