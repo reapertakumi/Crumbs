@@ -241,7 +241,8 @@ body:not(.side-open) .sidebar { transition: transform .3s var(--ease), visibilit
 .tree-empty { padding: 4px 12px 8px calc(32px + var(--depth) * 16px); font-size: 13px; color: var(--muted); }
 
 /* ---------- main ---------- */
-.main { }
+/* Cards gliding to their new spots (sidebar open/close) must never cause a sideways scrollbar. */
+.main { overflow-x: clip; }
 @media (min-width: 1000px) {
   body.side-open .main { margin-left: var(--side-w); }
   .scrim { display: none !important; }
