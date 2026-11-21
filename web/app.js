@@ -1562,6 +1562,11 @@ function openIO(user) {
   $('#io-title').textContent = user ? `Import & export: ${nameOf(user)}` : 'Import & export';
   $('#io-previews').hidden = !!user;
   $('#io-result').hidden = true;
+  // With "Remove duplicates" on in Settings, imports always skip duplicates.
+  const forced = !user && !!dupMode();
+  $('#io-skip').disabled = forced;
+  if (forced) $('#io-skip').checked = true;
+  $('#io-skip').parentElement.title = forced ? 'Always on: Remove duplicates is turned on in Settings' : '';
   updatePreviewCount();
   $('#io-dlg').showModal();
 }
@@ -1936,6 +1941,7 @@ function renderSettings() {
   $('#bg-bw').checked = !!prefs.bgBW;
   $('#bg-strength').value = String(prefs.bgStrength);
   $('#set-newtab').checked = prefs.newTab;
+  renderDup();
 }
 
 for (const [id, key] of SEGMENTS) {
@@ -1984,6 +1990,63 @@ $('#set-newtab').addEventListener('change', (e) => {
   savePrefs();
   buildCards();
   renderTree();
+});
+
+// ---- duplicates (saved to the account, not the browser) ----
+// "" = off, "all" = a link only once anywhere, "folder" = only once per folder.
+
+const dupMode = () => (S.me && S.me.dedupe) || '';
+const pickedDupMode = () => (document.querySelector('input[name="dup-mode"]:checked') || {}).value || 'all';
+
+function renderDup() {
+  const mode = dupMode();
+  $('#dup-on').checked = !!mode;
+  $('#dup-modes').hidden = !mode;
+  for (const r of document.querySelectorAll('input[name="dup-mode"]')) r.checked = r.value === (mode || 'all');
+}
+
+async function setDedupe(mode) {
+  const u = await api('PUT', '/api/me', { dedupe: mode });
+  if (S.guest) S.me.dedupe = u.dedupe; else refreshMe(u);
+  renderDup();
+  if (mode) await cleanDuplicates(mode, false);
+  else toast('Duplicates are allowed again');
+}
+
+// Count duplicates first, then ask before moving the extra copies to the trash.
+async function cleanDuplicates(mode, sayIfNone) {
+  const { count } = await api('POST', '/api/dedupe?dry=1', { mode });
+  if (!count) {
+    toast(sayIfNone ? 'No duplicates found' : (mode === 'all' ? 'Duplicates are now blocked everywhere' : 'Duplicates are now blocked inside each folder'));
+    return;
+  }
+  const ok = await ask({
+    title: `Found ${count} duplicate${count === 1 ? '' : 's'}`,
+    text: (mode === 'all'
+      ? 'Keep one copy of each link and move the other copies to the Trash?'
+      : 'Keep one copy of each link per folder and move the extra copies to the Trash?')
+      + ' The copy with a thumbnail (or the oldest one) is kept.',
+    ok: 'Move to Trash',
+  });
+  if (!ok) return;
+  const r = await api('POST', '/api/dedupe', { mode });
+  await loadBookmarks();
+  toast(`Moved ${r.count} duplicate${r.count === 1 ? '' : 's'} to the Trash`, { label: 'Show', fn: () => selectView('trash') });
+}
+
+$('#dup-on').addEventListener('change', async (e) => {
+  try { await setDedupe(e.target.checked ? pickedDupMode() : ''); }
+  catch (err) { toast(err.message); renderDup(); }
+});
+for (const r of document.querySelectorAll('input[name="dup-mode"]')) {
+  r.addEventListener('change', async () => {
+    try { await setDedupe(r.value); }
+    catch (err) { toast(err.message); renderDup(); }
+  });
+}
+$('#dup-clean').addEventListener('click', async () => {
+  try { await cleanDuplicates(dupMode() || pickedDupMode(), true); }
+  catch (err) { toast(err.message); }
 });
 
 // ---------- admin ----------

@@ -147,6 +147,10 @@ func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := a.duplicateOf(who.ID, in.URL, in.FolderID, 0); err != nil {
+		jsonErr(w, http.StatusConflict, err.Error())
+		return
+	}
 	if err := a.checkStorage(who.ID, int64(len(in.Name)+len(in.URL)+len(in.Description))); err != nil {
 		jsonErr(w, http.StatusInsufficientStorage, err.Error())
 		return
@@ -180,6 +184,10 @@ func (a *App) handleUpdateBookmark(w http.ResponseWriter, r *http.Request, who *
 	}
 	if err := a.cleanBookmark(who.ID, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := a.duplicateOf(who.ID, in.URL, in.FolderID, id); err != nil {
+		jsonErr(w, http.StatusConflict, err.Error())
 		return
 	}
 	res, err := a.db.Exec(`UPDATE bookmarks SET folder_id = ?, name = ?, url = ?, description = ?, updated_at = ?

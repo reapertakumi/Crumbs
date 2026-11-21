@@ -222,12 +222,6 @@
         <span class="muted small">You can move and zoom it inside the circle.</span>
       </div>
 
-      <div class="section">
-        <h3>Your bookmarks</h3>
-        <p class="muted small">Move bookmarks in and out of Crumbs: browser bookmark files, JSON, CSV, Markdown or plain text.</p>
-        <button class="btn" type="button" data-act="io">Import / export…</button>
-      </div>
-
       <form id="pw-form" class="section">
         <h3>Change password</h3>
         <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
@@ -294,7 +288,20 @@
       <div class="setting">
         <label class="switch"><input type="checkbox" id="set-newtab"> Open crumbs in a new tab</label>
       </div>
-      <p class="muted small">These settings are saved in this browser only.</p>
+      <p class="muted small">The settings above are saved in this browser only.</p>
+
+      <div class="section">
+        <h3>Duplicates</h3>
+        <label class="switch"><input type="checkbox" id="dup-on"> Remove duplicates</label>
+        <div class="dup-modes" id="dup-modes" hidden>
+          <label class="radio"><input type="radio" name="dup-mode" value="all">
+            <span><strong>Everywhere</strong><span class="muted small">A link can only be saved once.</span></span></label>
+          <label class="radio"><input type="radio" name="dup-mode" value="folder">
+            <span><strong>Not across folders</strong><span class="muted small">The same link may be in different folders, but only once per folder.</span></span></label>
+          <button class="btn small" type="button" id="dup-clean">Clean up now</button>
+        </div>
+        <p class="muted small">Saved to your account. Extra copies go to the Trash, so nothing is lost.</p>
+      </div>
     </div>
   </dialog>
 

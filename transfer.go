@@ -100,17 +100,15 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 		}
 		folderID[key(p, f.Name)] = f.ID
 	}
+	// Duplicates: the user's own rule wins; the "skip" checkbox alone means "same link anywhere".
+	mode := a.userDedupe(uid)
+	if mode == "" && in.SkipDuplicates {
+		mode = "all"
+	}
 	seen := map[string]bool{}
-	if in.SkipDuplicates {
-		rows, err := a.db.Query(`SELECT url FROM bookmarks WHERE user_id = ? AND deleted_at = 0`, uid)
-		if err == nil {
-			for rows.Next() {
-				var u string
-				if rows.Scan(&u) == nil {
-					seen[u] = true
-				}
-			}
-			rows.Close()
+	if mode != "" {
+		for _, d := range a.activeBookmarks(uid) {
+			seen[dupKey(mode, d.url, d.folder)] = true
 		}
 	}
 
@@ -129,11 +127,6 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 			skipped++
 			continue
 		}
-		if in.SkipDuplicates && seen[c.URL] {
-			skipped++
-			continue
-		}
-		seen[c.URL] = true
 		for _, p := range it.Path {
 			if p = clip(oneLine(p), 100); p != "" {
 				c.path = append(c.path, p)
@@ -157,7 +150,7 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 	}
 	defer tx.Rollback()
 	now := time.Now().Unix()
-	newFolders := 0
+	newFolders, added := 0, 0
 	for _, it := range items {
 		var parent int64
 		for _, name := range it.path {
@@ -176,6 +169,14 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 			}
 			parent = id
 		}
+		if mode != "" {
+			k := dupKey(mode, it.URL, ptrIf(parent))
+			if seen[k] {
+				skipped++
+				continue
+			}
+			seen[k] = true
+		}
 		created := it.created
 		if created <= 0 || created > now {
 			created = now
@@ -185,12 +186,13 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		added++
 	}
 	if err := tx.Commit(); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"added": len(items), "skipped": skipped, "folders": newFolders})
+	writeJSON(w, http.StatusOK, map[string]int{"added": added, "skipped": skipped, "folders": newFolders})
 }
 
 // ptrIf returns nil for 0 (no folder) and a pointer otherwise.

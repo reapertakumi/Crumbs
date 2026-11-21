@@ -86,7 +86,7 @@ svg { flex: none; }
 }
 
 /* ---------- inputs ---------- */
-input:not([type=checkbox]):not([type=file]), textarea, select {
+input:not([type=checkbox]):not([type=file]):not([type=radio]):not([type=range]), textarea, select {
   display: block; width: 100%; padding: 10px 12px;
   border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--bg); outline: none; font-size: 15px; font-weight: 400;
@@ -565,3 +565,26 @@ html[data-layout="compact"] .card-edit { top: 50%; transform: translateY(-50%); 
 .ti.drop-before::before { top: -1px; }
 .ti.drop-after::after { bottom: -1px; }
 .ti.drop-into { box-shadow: inset 0 0 0 2px var(--fg); }
+
+/* ---------- v5: scrollbars ---------- */
+/* Dialogs (Profile, Settings, …) still scroll, but the bar is invisible. */
+dialog { scrollbar-width: none; }
+dialog::-webkit-scrollbar { display: none; }
+/* Everywhere else: thin, dark, rounded. */
+html, .tree, textarea, select, .menu { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: #555; }
+
+/* ---------- v5: duplicates ---------- */
+.dup-modes { display: grid; gap: 8px; margin: 12px 0 4px; }
+.radio {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: var(--r-sm); font-weight: 400; font-size: 14px;
+}
+.radio:has(input:checked) { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.radio input { margin: 3px 0 0; accent-color: var(--fg); flex: none; }
+.radio strong { display: block; font-size: 14px; }
+.radio .muted { display: block; }
+.dup-modes .btn { justify-self: start; }

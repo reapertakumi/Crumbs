@@ -61,6 +61,11 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   middle to go inside it. Bookmarks without a folder live in **Uncategorized**.
 - **Trash.** Deleting a crumb moves it to the **Trash** (with Undo). Restore it or delete it forever from there.
   The trash empties itself after 30 days.
+- **No duplicates (optional).** Turn on **Settings → Duplicates → Remove duplicates** and pick **Everywhere** (a link
+  is saved only once) or **Not across folders** (the same link may sit in different folders, but only once per
+  folder). Crumbs then refuses new duplicates, skips them on import, and offers to move existing extra copies to the
+  Trash. The copy with a thumbnail, or else the oldest one, is kept. Links count as the same even with or without
+  `www.`, `https`, a trailing `/` or a `#section`.
 - **Sorting.** Sort by title, date created, last updated, URL, description or folder. Click the same option again to flip
   between ascending and descending.
 - **Profiles.** Pick a display name and a picture: the first letter of your name, one of 29 built-in icons, or your own photo,
@@ -231,7 +236,8 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `DELETE` | `/api/trash` | Empty the trash |
 | `PUT` `DELETE` | `/api/bookmarks/{id}/thumb` · `/icon` | Upload / remove an image (raw JPEG/PNG body) |
 | `POST` | `/api/register` | Create an account (only while registration is open) |
-| `PUT` | `/api/me` | Change your display name `{"displayName"}` |
+| `PUT` | `/api/me` | Change your display name and/or duplicate rule `{"displayName", "dedupe": ""\|"all"\|"folder"}` |
+| `POST` | `/api/dedupe` | `{"mode": "all"\|"folder"}` moves extra copies to the trash (`?dry=1` only counts them) |
 | `GET` | `/api/export` | Your folders and bookmarks as JSON |
 | `POST` | `/api/import` | Add many bookmarks `{"items":[{"name","url","description","path":["Folder","Sub"]}],"skipDuplicates":true}` |
 | `POST` | `/api/folders` | Create a folder `{"name", "parentId"}` |

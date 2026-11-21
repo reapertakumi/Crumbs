@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
   display_name  TEXT    NOT NULL DEFAULT '',
   blocked       INTEGER NOT NULL DEFAULT 0,
   storage_limit INTEGER NOT NULL DEFAULT 0,
-  avatar_size   INTEGER NOT NULL DEFAULT 0
+  avatar_size   INTEGER NOT NULL DEFAULT 0,
+  dedupe        TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -96,6 +97,7 @@ func migrate(db *sql.DB) error {
 		{"users", "blocked", "INTEGER NOT NULL DEFAULT 0"},
 		{"users", "storage_limit", "INTEGER NOT NULL DEFAULT 0"},
 		{"users", "avatar_size", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "dedupe", "TEXT NOT NULL DEFAULT ''"},
 		{"bookmarks", "thumb_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "icon_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "deleted_at", "INTEGER NOT NULL DEFAULT 0"},

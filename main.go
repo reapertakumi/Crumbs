@@ -78,6 +78,7 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("DELETE /api/bookmarks/{id}", a.user(a.handleDeleteBookmark))
 	mux.HandleFunc("POST /api/bookmarks/{id}/restore", a.user(a.handleRestoreBookmark))
 	mux.HandleFunc("DELETE /api/trash", a.user(a.handleEmptyTrash))
+	mux.HandleFunc("POST /api/dedupe", a.user(a.handleDedupe))
 	mux.HandleFunc("PUT /api/bookmarks/{id}/{kind}", a.user(a.handlePutImage))
 	mux.HandleFunc("DELETE /api/bookmarks/{id}/{kind}", a.user(a.handleDeleteImage))
 	mux.HandleFunc("GET /img/{id}/{kind}", a.user(a.handleGetImage))

@@ -30,15 +30,17 @@ type User struct {
 	IsAdmin     bool   `json:"isAdmin"`
 	// Avatar is "" (first letter), "icon:<name>" or an image URL.
 	Avatar string `json:"avatar"`
+	// Dedupe is the duplicate rule: "" (off), "all" or "folder".
+	Dedupe string `json:"dedupe"`
 }
 
-const userCols = `id, username, display_name, is_admin, avatar`
+const userCols = `id, username, display_name, is_admin, avatar, dedupe`
 
 func scanUser(s scanner) (*User, error) {
 	var u User
 	var admin int
 	var av string
-	if err := s.Scan(&u.ID, &u.Username, &u.DisplayName, &admin, &av); err != nil {
+	if err := s.Scan(&u.ID, &u.Username, &u.DisplayName, &admin, &av, &u.Dedupe); err != nil {
 		return nil, err
 	}
 	u.IsAdmin = admin == 1
@@ -194,7 +196,7 @@ func (a *App) startSession(w http.ResponseWriter, r *http.Request, uid int64) er
 
 func (a *App) sessionUser(token string) *User {
 	u, err := scanUser(a.db.QueryRow(`
-		SELECT u.id, u.username, u.display_name, u.is_admin, u.avatar
+		SELECT u.id, u.username, u.display_name, u.is_admin, u.avatar, u.dedupe
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ? AND u.blocked = 0`, tokenHash(token), time.Now().Unix()))
 	if err != nil {
@@ -379,22 +381,30 @@ func (a *App) handlePassword(w http.ResponseWriter, r *http.Request, who *Who) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// handleUpdateMe lets a user change their own display name.
+// handleUpdateMe changes the signed-in user's own display name and/or
+// duplicate rule. Only the fields that are sent change.
 func (a *App) handleUpdateMe(w http.ResponseWriter, r *http.Request, who *Who) {
-	if who.Guest {
-		jsonErr(w, http.StatusForbidden, "sign in to change your profile")
-		return
-	}
 	var in struct {
-		DisplayName string `json:"displayName"`
+		DisplayName *string `json:"displayName"`
+		Dedupe      *string `json:"dedupe"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	if _, err := a.db.Exec(`UPDATE users SET display_name = ? WHERE id = ?`, cleanDisplayName(in.DisplayName), who.ID); err != nil {
-		jsonErr(w, http.StatusInternalServerError, err.Error())
-		return
+	if in.DisplayName != nil {
+		if who.Guest {
+			jsonErr(w, http.StatusForbidden, "sign in to change your profile")
+			return
+		}
+		a.db.Exec(`UPDATE users SET display_name = ? WHERE id = ?`, cleanDisplayName(*in.DisplayName), who.ID)
+	}
+	if in.Dedupe != nil {
+		if !validDedupe(*in.Dedupe) {
+			jsonErr(w, http.StatusBadRequest, "unknown duplicate setting")
+			return
+		}
+		a.db.Exec(`UPDATE users SET dedupe = ? WHERE id = ?`, *in.Dedupe, who.ID)
 	}
 	writeJSON(w, http.StatusOK, a.getUser(who.ID))
 }
