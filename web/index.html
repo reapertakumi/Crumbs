@@ -114,6 +114,8 @@
         <button class="chip-x" type="button" id="view-clear" hidden aria-label="Show all crumbs">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
+        <span class="spacer"></span>
+        <button class="btn small" type="button" id="view-empty" hidden>Empty trash</button>
       </div>
       <section id="grid" class="grid"></section>
       <p id="empty" class="empty" hidden></p>
@@ -177,6 +179,10 @@
       <label>Inside
         <select name="parent" id="folder-parent"></select>
       </label>
+      <div class="setting-label">Color</div>
+      <div class="swatches" id="folder-colors"></div>
+      <div class="setting-label">Icon</div>
+      <div class="icon-pick" id="folder-icons"></div>
       <p class="error" id="folder-error" hidden></p>
       <div class="row">
         <button type="button" class="btn" id="folder-delete" hidden>Delete</button>

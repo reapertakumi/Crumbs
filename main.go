@@ -76,12 +76,15 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("POST /api/bookmarks", a.user(a.handleCreateBookmark))
 	mux.HandleFunc("PUT /api/bookmarks/{id}", a.user(a.handleUpdateBookmark))
 	mux.HandleFunc("DELETE /api/bookmarks/{id}", a.user(a.handleDeleteBookmark))
+	mux.HandleFunc("POST /api/bookmarks/{id}/restore", a.user(a.handleRestoreBookmark))
+	mux.HandleFunc("DELETE /api/trash", a.user(a.handleEmptyTrash))
 	mux.HandleFunc("PUT /api/bookmarks/{id}/{kind}", a.user(a.handlePutImage))
 	mux.HandleFunc("DELETE /api/bookmarks/{id}/{kind}", a.user(a.handleDeleteImage))
 	mux.HandleFunc("GET /img/{id}/{kind}", a.user(a.handleGetImage))
 
 	// Folders (nested)
 	mux.HandleFunc("POST /api/folders", a.user(a.handleCreateFolder))
+	mux.HandleFunc("PUT /api/folders/order", a.user(a.handleOrderFolders))
 	mux.HandleFunc("PUT /api/folders/{id}", a.user(a.handleUpdateFolder))
 	mux.HandleFunc("DELETE /api/folders/{id}", a.user(a.handleDeleteFolder))
 

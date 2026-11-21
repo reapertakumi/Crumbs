@@ -241,7 +241,7 @@ body:not(.side-open) .sidebar { transition: transform .3s var(--ease), visibilit
 .tree-empty { padding: 4px 12px 8px calc(32px + var(--depth) * 16px); font-size: 13px; color: var(--muted); }
 
 /* ---------- main ---------- */
-.main { transition: margin-left .3s var(--ease); }
+.main { }
 @media (min-width: 1000px) {
   body.side-open .main { margin-left: var(--side-w); }
   .scrim { display: none !important; }
@@ -522,3 +522,46 @@ html[data-layout="compact"] .card-edit { top: 50%; transform: translateY(-50%); 
 .io-result { margin: 12px 0 0; padding: 9px 12px; font-size: 14px; border: 1px solid var(--line); border-radius: var(--r-sm); }
 #io-dlg .btn.file-btn { margin-top: 4px; }
 .dd.floating.up .menu { top: auto; bottom: 4px; transform-origin: bottom right; }
+
+/* ---------- v4: sort button (label + direction arrow) ---------- */
+#sort-btn .sort-dir { width: 15px; height: 15px; transition: transform .2s var(--ease); }
+#sort-btn .sort-dir.desc { transform: rotate(180deg); }
+
+/* ---------- v4: trash ---------- */
+.view-head { align-items: center; }
+.view-head h2 { line-height: 1.2; }
+.card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.card-actions .card-edit { position: static; opacity: 1; }
+.card.trashed .thumb, .card.trashed .card-title { opacity: .6; }
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast-btn { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+
+/* ---------- v4: folder look (color + icon) ---------- */
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.swatch {
+  width: 28px; height: 28px; border-radius: 50%; cursor: pointer; padding: 0;
+  border: 2px solid var(--bg); background: var(--sw, var(--fg)); box-shadow: 0 0 0 1px var(--line);
+}
+.swatch.none { background: linear-gradient(135deg, var(--bg) 45%, var(--fg) 45% 55%, var(--bg) 55%); }
+.swatch.on { box-shadow: 0 0 0 2px var(--fg); }
+.icon-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 6px; margin-bottom: 16px; }
+.icon-opt {
+  aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); cursor: pointer; color: var(--fg);
+}
+.icon-opt:hover { background: var(--hover); }
+.icon-opt.on { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.icon-opt svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tag { display: inline-flex; align-items: center; gap: 4px; }
+.tag .tag-ico { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- v4: drag folders ---------- */
+.ti.folder[draggable="true"] { cursor: grab; }
+.ti.dragging { opacity: .35; }
+.ti.drop-before::before, .ti.drop-after::after {
+  content: ""; position: absolute; left: calc(8px + var(--depth) * 16px); right: 6px; height: 2px;
+  border-radius: 2px; background: var(--fg); pointer-events: none;
+}
+.ti.drop-before::before { top: -1px; }
+.ti.drop-after::after { bottom: -1px; }
+.ti.drop-into { box-shadow: inset 0 0 0 2px var(--fg); }

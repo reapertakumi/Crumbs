@@ -23,9 +23,13 @@ type Bookmark struct {
 	Icon        string `json:"icon"`
 	Created     int64  `json:"created"`
 	Updated     int64  `json:"updated"`
+	Deleted     int64  `json:"deleted,omitempty"` // when it went to the trash (0 = not in trash)
 }
 
-const bmCols = `id, folder_id, name, url, description, thumb_ver, icon_ver, created_at, updated_at`
+const bmCols = `id, folder_id, name, url, description, thumb_ver, icon_ver, created_at, updated_at, deleted_at`
+
+// Bookmarks in the trash are deleted for good after this long.
+const trashDays = 30
 
 type scanner interface{ Scan(dest ...any) error }
 
@@ -33,7 +37,7 @@ func scanBookmark(s scanner) (*Bookmark, error) {
 	var b Bookmark
 	var folder sql.NullInt64
 	var tv, iv int64
-	if err := s.Scan(&b.ID, &folder, &b.Name, &b.URL, &b.Description, &tv, &iv, &b.Created, &b.Updated); err != nil {
+	if err := s.Scan(&b.ID, &folder, &b.Name, &b.URL, &b.Description, &tv, &iv, &b.Created, &b.Updated, &b.Deleted); err != nil {
 		return nil, err
 	}
 	if folder.Valid {
@@ -110,7 +114,7 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	list := []*Bookmark{}
+	list, trash := []*Bookmark{}, []*Bookmark{}
 	for rows.Next() {
 		b, err := scanBookmark(rows)
 		if err != nil {
@@ -118,7 +122,11 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		list = append(list, b)
+		if b.Deleted > 0 {
+			trash = append(trash, b)
+		} else {
+			list = append(list, b)
+		}
 	}
 	rows.Close()
 	folders, err := a.listFolders(who.ID)
@@ -126,7 +134,7 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "folders": folders})
+	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "trash": trash, "folders": folders, "trashDays": trashDays})
 }
 
 func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
@@ -192,13 +200,38 @@ func (a *App) handleUpdateBookmark(w http.ResponseWriter, r *http.Request, who *
 	writeJSON(w, http.StatusOK, b)
 }
 
+// handleDeleteBookmark moves a bookmark to the trash. With ?forever=1, or
+// when it is already in the trash, it is deleted for good.
 func (a *App) handleDeleteBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
+	id, err := pathID(r)
+	var deleted int64
+	if err == nil {
+		err = a.db.QueryRow(`SELECT deleted_at FROM bookmarks WHERE id = ? AND user_id = ?`, id, who.ID).Scan(&deleted)
+	}
+	if err != nil {
+		jsonErr(w, http.StatusNotFound, "no such bookmark")
+		return
+	}
+	if deleted == 0 && r.URL.Query().Get("forever") != "1" {
+		a.db.Exec(`UPDATE bookmarks SET deleted_at = ? WHERE id = ? AND user_id = ?`, time.Now().Unix(), id, who.ID)
+		writeJSON(w, http.StatusOK, map[string]bool{"trashed": true})
+		return
+	}
+	if _, err := a.db.Exec(`DELETE FROM bookmarks WHERE id = ? AND user_id = ?`, id, who.ID); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.removeImages(id)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (a *App) handleRestoreBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
 	id, err := pathID(r)
 	if err != nil {
 		jsonErr(w, http.StatusNotFound, "no such bookmark")
 		return
 	}
-	res, err := a.db.Exec(`DELETE FROM bookmarks WHERE id = ? AND user_id = ?`, id, who.ID)
+	res, err := a.db.Exec(`UPDATE bookmarks SET deleted_at = 0 WHERE id = ? AND user_id = ?`, id, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -207,8 +240,40 @@ func (a *App) handleDeleteBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusNotFound, "no such bookmark")
 		return
 	}
-	a.removeImages(id)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// purgeTrash deletes trashed bookmarks of one user (uid > 0) or, with uid 0,
+// every user's trash older than `before` (unix seconds).
+func (a *App) purgeTrash(uid, before int64) int {
+	q := `SELECT id FROM bookmarks WHERE deleted_at > 0 AND deleted_at < ?`
+	args := []any{before}
+	if uid > 0 {
+		q += ` AND user_id = ?`
+		args = append(args, uid)
+	}
+	var ids []int64
+	rows, err := a.db.Query(q, args...)
+	if err != nil {
+		return 0
+	}
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		a.db.Exec(`DELETE FROM bookmarks WHERE id = ?`, id)
+		a.removeImages(id)
+	}
+	return len(ids)
+}
+
+func (a *App) handleEmptyTrash(w http.ResponseWriter, r *http.Request, who *Who) {
+	n := a.purgeTrash(who.ID, time.Now().Unix()+1)
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": n})
 }
 
 // ---- images (thumbnails and favicons, stored on the Pi) ----

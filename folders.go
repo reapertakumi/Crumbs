@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"regexp"
 	"time"
 )
 
@@ -11,16 +12,27 @@ type Folder struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
 	ParentID *int64 `json:"parentId"`
+	Color    string `json:"color"`    // "" or "#rrggbb"
+	Icon     string `json:"icon"`     // "" (plain folder) or an icon name the front end knows
+	Position int64  `json:"position"` // order among siblings
 	Created  int64  `json:"created"`
 }
 
 type folderIn struct {
 	Name     string `json:"name"`
 	ParentID *int64 `json:"parentId"`
+	Color    string `json:"color"`
+	Icon     string `json:"icon"`
 }
 
+var (
+	reColor      = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+	reFolderIcon = regexp.MustCompile(`^[a-z0-9-]{1,24}$`)
+)
+
 func (a *App) listFolders(uid int64) ([]*Folder, error) {
-	rows, err := a.db.Query(`SELECT id, name, parent_id, created_at FROM folders WHERE user_id = ? ORDER BY name COLLATE NOCASE, id`, uid)
+	rows, err := a.db.Query(`SELECT id, name, parent_id, color, icon, position, created_at FROM folders
+		WHERE user_id = ? ORDER BY position, name COLLATE NOCASE, id`, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +41,7 @@ func (a *App) listFolders(uid int64) ([]*Folder, error) {
 	for rows.Next() {
 		var f Folder
 		var parent sql.NullInt64
-		if err := rows.Scan(&f.ID, &f.Name, &parent, &f.Created); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &parent, &f.Color, &f.Icon, &f.Position, &f.Created); err != nil {
 			return nil, err
 		}
 		if parent.Valid {
@@ -77,7 +89,21 @@ func (in *folderIn) clean() error {
 	if in.Name == "" {
 		return errors.New("give the folder a name")
 	}
+	if in.Color != "" && !reColor.MatchString(in.Color) {
+		return errors.New("unknown folder color")
+	}
+	if in.Icon != "" && !reFolderIcon.MatchString(in.Icon) {
+		return errors.New("unknown folder icon")
+	}
 	return nil
+}
+
+// nextPosition puts a folder after its new siblings.
+func (a *App) nextPosition(uid int64, parent *int64) int64 {
+	var n int64
+	a.db.QueryRow(`SELECT COALESCE(MAX(position), -1) + 1 FROM folders WHERE user_id = ? AND parent_id IS ?`,
+		uid, nullID(parent)).Scan(&n)
+	return n
 }
 
 func (a *App) handleCreateFolder(w http.ResponseWriter, r *http.Request, who *Who) {
@@ -95,19 +121,24 @@ func (a *App) handleCreateFolder(w http.ResponseWriter, r *http.Request, who *Wh
 		return
 	}
 	now := time.Now().Unix()
-	res, err := a.db.Exec(`INSERT INTO folders(user_id, parent_id, name, created_at) VALUES (?, ?, ?, ?)`,
-		who.ID, nullID(in.ParentID), in.Name, now)
+	pos := a.nextPosition(who.ID, in.ParentID)
+	res, err := a.db.Exec(`INSERT INTO folders(user_id, parent_id, name, color, icon, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		who.ID, nullID(in.ParentID), in.Name, in.Color, in.Icon, pos, now)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	id, _ := res.LastInsertId()
-	writeJSON(w, http.StatusCreated, &Folder{ID: id, Name: in.Name, ParentID: in.ParentID, Created: now})
+	writeJSON(w, http.StatusCreated, &Folder{ID: id, Name: in.Name, ParentID: in.ParentID, Color: in.Color, Icon: in.Icon, Position: pos, Created: now})
 }
 
 func (a *App) handleUpdateFolder(w http.ResponseWriter, r *http.Request, who *Who) {
 	id, err := pathID(r)
-	if err != nil || !a.folderOwned(who.ID, id) {
+	var oldParent sql.NullInt64
+	if err == nil {
+		err = a.db.QueryRow(`SELECT parent_id FROM folders WHERE id = ? AND user_id = ?`, id, who.ID).Scan(&oldParent)
+	}
+	if err != nil {
 		jsonErr(w, http.StatusNotFound, "no such folder")
 		return
 	}
@@ -124,8 +155,53 @@ func (a *App) handleUpdateFolder(w http.ResponseWriter, r *http.Request, who *Wh
 		jsonErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if _, err := a.db.Exec(`UPDATE folders SET name = ?, parent_id = ? WHERE id = ? AND user_id = ?`,
-		in.Name, nullID(in.ParentID), id, who.ID); err != nil {
+	moved := (in.ParentID == nil) != !oldParent.Valid || (in.ParentID != nil && *in.ParentID != oldParent.Int64)
+	if moved {
+		a.db.Exec(`UPDATE folders SET position = ? WHERE id = ?`, a.nextPosition(who.ID, in.ParentID), id)
+	}
+	if _, err := a.db.Exec(`UPDATE folders SET name = ?, parent_id = ?, color = ?, icon = ? WHERE id = ? AND user_id = ?`,
+		in.Name, nullID(in.ParentID), in.Color, in.Icon, id, who.ID); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleOrderFolders puts the given folders, in this order, inside parentId
+// (null = top level). Used when folders are dragged around in the sidebar.
+func (a *App) handleOrderFolders(w http.ResponseWriter, r *http.Request, who *Who) {
+	var in struct {
+		ParentID *int64  `json:"parentId"`
+		IDs      []int64 `json:"ids"`
+	}
+	if err := readJSON(w, r, &in); err != nil || len(in.IDs) > 5000 {
+		jsonErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	for _, id := range in.IDs {
+		if !a.folderOwned(who.ID, id) {
+			jsonErr(w, http.StatusNotFound, "no such folder")
+			return
+		}
+		if err := a.checkParent(who.ID, id, in.ParentID); err != nil {
+			jsonErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	tx, err := a.db.Begin()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer tx.Rollback()
+	for i, id := range in.IDs {
+		if _, err := tx.Exec(`UPDATE folders SET parent_id = ?, position = ? WHERE id = ? AND user_id = ?`,
+			nullID(in.ParentID), i, id, who.ID); err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}

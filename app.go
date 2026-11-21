@@ -105,6 +105,7 @@ func (a *App) janitor() {
 	defer t.Stop()
 	for {
 		a.db.Exec(`DELETE FROM sessions WHERE expires_at <= ?`, time.Now().Unix())
+		a.purgeTrash(0, time.Now().AddDate(0, 0, -trashDays).Unix())
 		a.limiter.sweep()
 		<-t.C
 	}

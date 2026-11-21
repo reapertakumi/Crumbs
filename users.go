@@ -95,7 +95,7 @@ type adminUser struct {
 func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request, who *Who) {
 	rows, err := a.db.Query(`
 		SELECT u.id, u.username, u.display_name, u.is_admin, u.avatar, u.blocked, u.storage_limit, u.created_at,
-		       (SELECT COUNT(*) FROM bookmarks b WHERE b.user_id = u.id), ` + usageSQL + `
+		       (SELECT COUNT(*) FROM bookmarks b WHERE b.user_id = u.id AND b.deleted_at = 0), ` + usageSQL + `
 		FROM users u ORDER BY u.id`)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())

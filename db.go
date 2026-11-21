@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS folders (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   parent_id  INTEGER REFERENCES folders(id) ON DELETE CASCADE,
   name       TEXT    NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  color      TEXT    NOT NULL DEFAULT '',
+  icon       TEXT    NOT NULL DEFAULT '',
+  position   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id);
 
@@ -48,7 +51,8 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   thumb_size  INTEGER NOT NULL DEFAULT 0,
-  icon_size   INTEGER NOT NULL DEFAULT 0
+  icon_size   INTEGER NOT NULL DEFAULT 0,
+  deleted_at  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, created_at DESC);
 
@@ -94,6 +98,10 @@ func migrate(db *sql.DB) error {
 		{"users", "avatar_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "thumb_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "icon_size", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "deleted_at", "INTEGER NOT NULL DEFAULT 0"},
+		{"folders", "color", "TEXT NOT NULL DEFAULT ''"},
+		{"folders", "icon", "TEXT NOT NULL DEFAULT ''"},
+		{"folders", "position", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, c := range add {
 		if !hasColumn(db, c.table, c.column) {

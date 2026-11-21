@@ -27,7 +27,7 @@ func (a *App) exportFor(w http.ResponseWriter, uid int64) {
 		return
 	}
 	rows, err := a.db.Query(`SELECT name, url, description, folder_id, created_at, updated_at
-		FROM bookmarks WHERE user_id = ? ORDER BY created_at, id`, uid)
+		FROM bookmarks WHERE user_id = ? AND deleted_at = 0 ORDER BY created_at, id`, uid)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -102,7 +102,7 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 	}
 	seen := map[string]bool{}
 	if in.SkipDuplicates {
-		rows, err := a.db.Query(`SELECT url FROM bookmarks WHERE user_id = ?`, uid)
+		rows, err := a.db.Query(`SELECT url FROM bookmarks WHERE user_id = ? AND deleted_at = 0`, uid)
 		if err == nil {
 			for rows.Next() {
 				var u string

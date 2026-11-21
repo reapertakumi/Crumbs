@@ -56,7 +56,11 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   them on the Pi. Thumbnails always load from the Pi, never from the original site.
 - **Your own images.** You can upload, paste (Ctrl+V) or drag in any image, for example a screenshot.
 - **Folders and subfolders.** The sidebar (the ☰ button) shows every folder as a tree with its bookmarks inside.
-  Hover a folder to collapse or expand it, add a subfolder or rename it. Bookmarks without a folder live in **Uncategorized**.
+  Hover a folder to collapse or expand it, add a subfolder or edit it. Give each folder its own color and icon, and
+  drag folders to reorder them: drop on the top or bottom edge of another folder to go above or below it, or in the
+  middle to go inside it. Bookmarks without a folder live in **Uncategorized**.
+- **Trash.** Deleting a crumb moves it to the **Trash** (with Undo). Restore it or delete it forever from there.
+  The trash empties itself after 30 days.
 - **Sorting.** Sort by title, date created, last updated, URL, description or folder. Click the same option again to flip
   between ascending and descending.
 - **Profiles.** Pick a display name and a picture: the first letter of your name, one of 29 built-in icons, or your own photo,
@@ -222,14 +226,17 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `POST` | `/api/setup` | Create the first (admin) account |
 | `POST` | `/api/login` · `/api/logout` | Sign in / out |
 | `GET` `POST` | `/api/bookmarks` | List / create |
-| `PUT` `DELETE` | `/api/bookmarks/{id}` | Update / delete |
+| `PUT` `DELETE` | `/api/bookmarks/{id}` | Update / move to trash (`?forever=1` deletes for good) |
+| `POST` | `/api/bookmarks/{id}/restore` | Take a crumb out of the trash |
+| `DELETE` | `/api/trash` | Empty the trash |
 | `PUT` `DELETE` | `/api/bookmarks/{id}/thumb` · `/icon` | Upload / remove an image (raw JPEG/PNG body) |
 | `POST` | `/api/register` | Create an account (only while registration is open) |
 | `PUT` | `/api/me` | Change your display name `{"displayName"}` |
 | `GET` | `/api/export` | Your folders and bookmarks as JSON |
 | `POST` | `/api/import` | Add many bookmarks `{"items":[{"name","url","description","path":["Folder","Sub"]}],"skipDuplicates":true}` |
 | `POST` | `/api/folders` | Create a folder `{"name", "parentId"}` |
-| `PUT` `DELETE` | `/api/folders/{id}` | Rename or move / delete (contents move up one level) |
+| `PUT` `DELETE` | `/api/folders/{id}` | Edit `{"name","parentId","color","icon"}` / delete (contents move up one level) |
+| `PUT` | `/api/folders/order` | Reorder: `{"parentId": null, "ids": [3, 1, 2]}` puts those folders there, in that order |
 | `PUT` | `/api/me/avatar` | `{"avatar": "" | "icon:cat"}` |
 | `PUT` | `/api/me/avatar/image` | Upload a profile photo (raw JPEG/PNG body) |
 | `GET` | `/api/meta?url=` | Title, description, image and icon candidates |

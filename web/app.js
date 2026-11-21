@@ -36,6 +36,8 @@ const UI_ICONS = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"/>',
   swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',
+  restore: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/>',
 };
 
 // Profile picture choices: solid black & white glyphs (holes are cut out).
@@ -127,7 +129,7 @@ const saveTree = () => writeStore('crumbs.tree', { open: [...treeState.open], un
 
 const S = {
   me: null, guest: false, loginRequired: true, registration: false,
-  list: [], folders: [],
+  list: [], trash: [], trashDays: 30, folders: [],
   fmap: new Map(),     // id -> folder
   kids: new Map(),     // parent id (0 = top) -> child folders
   totals: new Map(),   // folder id -> crumbs inside, including subfolders
@@ -178,12 +180,19 @@ function showError(sel, msg) {
 }
 
 let toastTimer;
-function toast(msg) {
+// toast('Saved') or toast('Moved to the trash', { label: 'Undo', fn })
+function toast(msg, action = null) {
   const t = $('#toast');
-  t.textContent = msg;
+  t.replaceChildren(h('span', { text: msg }));
+  if (action) {
+    t.append(h('button', {
+      type: 'button', class: 'toast-btn', text: action.label,
+      onclick: () => { t.hidden = true; action.fn(); },
+    }));
+  }
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  toastTimer = setTimeout(() => { t.hidden = true; }, action ? 6000 : 2600);
 }
 
 function busy(btn, on, label) {
@@ -419,8 +428,8 @@ function renderMe() {
 
 const SORTS = [
   { key: 'title', label: 'Title', def: 'asc', get: (b) => b.name },
-  { key: 'created', label: 'Date created', def: 'desc', num: true, get: (b) => b.created },
-  { key: 'updated', label: 'Last updated', def: 'desc', num: true, get: (b) => b.updated },
+  { key: 'created', label: 'Created', def: 'desc', num: true, get: (b) => b.created },
+  { key: 'updated', label: 'Updated', def: 'desc', num: true, get: (b) => b.updated },
   { key: 'url', label: 'URL', def: 'asc', get: (b) => b.url.replace(/^https?:\/\/(www\.)?/i, '') },
   { key: 'description', label: 'Description', def: 'asc', get: (b) => b.description },
   { key: 'folder', label: 'Folder', def: 'asc', get: (b) => folderPath(b.folderId) },
@@ -455,10 +464,14 @@ function renderSortMenu() {
         type: 'button', role: 'menuitemradio', 'aria-checked': String(active),
         class: 'sort-item' + (active ? ' active' : '') + (desc ? ' desc' : ''),
         onclick: () => setSort(s),
-      }, s.label, active ? h('span', { class: 'dir-txt', text: dirText(s, prefs.sort.dir) }) : null, icon('arrowUp', 'dir'));
+      }, s.label, icon('arrowUp', 'dir'));
     }));
+  // The header button just says what it sorts by, plus an up/down arrow.
+  const desc = prefs.sort.dir === 'desc';
   const btn = $('#sort-btn');
+  btn.replaceChildren(h('span', { class: 'lbl', text: cur.label }), icon('arrowUp', 'sort-dir' + (desc ? ' desc' : '')));
   btn.title = `Sorted by ${cur.label.toLowerCase()}, ${dirText(cur, prefs.sort.dir).toLowerCase()}`;
+  btn.setAttribute('aria-label', btn.title);
 }
 
 function setSort(s) {
@@ -495,7 +508,7 @@ function indexFolders() {
     if (!S.kids.has(p)) S.kids.set(p, []);
     S.kids.get(p).push(f);
   }
-  for (const list of S.kids.values()) list.sort((a, b) => coll.compare(a.name, b.name));
+  for (const list of S.kids.values()) list.sort((a, b) => (a.position - b.position) || coll.compare(a.name, b.name));
   S.totals = new Map();
   for (const b of S.list) {
     for (let id = b.folderId, guard = 0; id && S.fmap.has(id) && guard < 100; id = S.fmap.get(id).parentId, guard++) {
@@ -535,11 +548,50 @@ function folderOptions(select, { selected = null, exclude = new Set(), rootLabel
   select.value = selected == null ? '' : String(selected);
 }
 
+// ---------- folder looks: color + icon ----------
+
+const FOLDER_COLORS = ['', '#8e8e93', '#e5484d', '#f76b15', '#f5b400', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#a07553'];
+const FOLDER_ICONS = {
+  folder: UI_ICONS.folder,
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z"/>',
+  work: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 12.5h18"/>',
+  home: '<path d="M3.5 11L12 4l8.5 7v9a1 1 0 0 1-1 1H15v-6H9v6H4.5a1 1 0 0 1-1-1z"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
+  book: '<path d="M4 4.5h6a2 2 0 0 1 2 2V20a1.5 1.5 0 0 0-1.5-1.5H4zM20 4.5h-6a2 2 0 0 0-2 2V20a1.5 1.5 0 0 1 1.5-1.5H20z"/>',
+  music: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7.5 4v16M16.5 4v16M3 9h4.5M3 15h4.5M16.5 9H21M16.5 15H21"/>',
+  camera: '<path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.8"/>',
+  game: '<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4"/><circle cx="15.5" cy="11.5" r=".6"/><circle cx="17.8" cy="13.7" r=".6"/>',
+  cart: '<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5h3l2.5 12.5h11l2-8.5H6.4"/>',
+  travel: '<path d="M21 3L3 10.5l7.5 3L13.5 21z"/><path d="M10.5 13.5L21 3"/>',
+  idea: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+  coffee: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16M8 3.5V6M12 3.5V6"/>',
+  leaf: '<path d="M5 19C5 10 11 5 20 4c-.5 9-6 15-15 15z"/><path d="M5 19l8-8"/>',
+  bolt: '<path d="M13 2.5L5 14h6l-1 7.5L18 10h-6z"/>',
+  flag: '<path d="M5 21V4M5 4h12l-2.5 4.5L17 13H5"/>',
+  box: '<path d="M3 7.5l9-4.5 9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5M12 12v9"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
+  link: '<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4L11.5 6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/>',
+  school: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c2 2 10 2 12 0v-5M22 9v5"/>',
+  money: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.8"/><path d="M6 9v6M18 9v6"/>',
+};
+
+function folderIcon(f, cls = 'ico') {
+  const name = f && f.icon && FOLDER_ICONS[f.icon] ? f.icon : 'folder';
+  const svg = icon(name, cls, FOLDER_ICONS);
+  if (f && f.color) svg.style.setProperty('color', f.color);
+  return svg;
+}
+
 // ---------- bookmarks list ----------
 
 async function loadBookmarks() {
   const data = await api('GET', '/api/bookmarks');
   S.list = data.bookmarks || [];
+  S.trash = data.trash || [];
+  S.trashDays = data.trashDays || 30;
   S.folders = data.folders || [];
   indexFolders();
   if (S.view > 0 && !S.fmap.has(S.view)) S.view = null;
@@ -548,7 +600,7 @@ async function loadBookmarks() {
 }
 
 function buildCards() {
-  cards = new Map(S.list.map((b) => [b.id, card(b)]));
+  cards = new Map([...S.list, ...S.trash].map((b) => [b.id, card(b)]));
   orderGrid();
 }
 
@@ -560,36 +612,40 @@ function card(b) {
       : h('div', { class: 'thumb-empty' },
           b.icon ? h('img', { src: b.icon, alt: '', loading: 'lazy' }) : h('span', { text: firstLetter(b.name || host) })));
   const folder = b.folderId && S.fmap.get(b.folderId);
+  let tag = null;
+  if (folder) {
+    tag = h('span', { class: 'tag', title: folderPath(folder.id) }, folderIcon(folder, 'tag-ico'), folder.name);
+  }
   const body = h('div', { class: 'card-body' },
     h('div', { class: 'card-title' },
       b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy' }) : null,
       h('span', { text: b.name })),
-    h('div', { class: 'card-meta' },
-      h('span', { text: host }),
-      folder ? h('span', { class: 'tag', text: folder.name, title: folderPath(folder.id) }) : null),
+    h('div', { class: 'card-meta' }, h('span', { text: host }), tag),
     b.description ? h('p', { class: 'card-desc', text: b.description }) : null);
 
-  const edit = h('button', {
-    class: 'card-edit', type: 'button', title: 'Edit', 'aria-label': `Edit ${b.name}`,
-    onclick: () => openEditor(b),
-  }, icon('edit'));
+  const actions = b.deleted
+    ? h('div', { class: 'card-actions' },
+        h('button', { class: 'card-edit', type: 'button', title: 'Restore', 'aria-label': `Restore ${b.name}`, onclick: () => restoreBookmark(b) }, icon('restore')),
+        h('button', { class: 'card-edit', type: 'button', title: 'Delete forever', 'aria-label': `Delete ${b.name} forever`, onclick: () => deleteForever(b) }, icon('trash')))
+    : h('button', { class: 'card-edit', type: 'button', title: 'Edit', 'aria-label': `Edit ${b.name}`, onclick: () => openEditor(b) }, icon('edit'));
 
-  return h('article', { class: 'card' },
+  return h('article', { class: 'card' + (b.deleted ? ' trashed' : '') },
     h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url }, thumb, body),
-    edit);
+    actions);
 }
 
+let viewSet = new Set();
 function inView(b) {
+  if (S.view === 'trash') return !!b.deleted;
+  if (b.deleted) return false;
   if (S.view === null) return true;
   if (S.view === 0) return !b.folderId || !S.fmap.has(b.folderId);
   return viewSet.has(b.folderId);
 }
-let viewSet = new Set();
 
 // Put the cards in sort order (only needed when data or sort changes).
 function orderGrid() {
-  const grid = $('#grid');
-  grid.replaceChildren(...sorted(S.list).map((b) => cards.get(b.id)));
+  $('#grid').replaceChildren(...sorted([...S.list, ...S.trash]).map((b) => cards.get(b.id)));
   filterGrid();
 }
 
@@ -597,7 +653,7 @@ function filterGrid() {
   viewSet = S.view > 0 ? subtree(S.view) : new Set();
   const terms = S.q.toLowerCase().split(/\s+/).filter(Boolean);
   let shown = 0;
-  for (const b of S.list) {
+  for (const b of [...S.list, ...S.trash]) {
     let ok = inView(b);
     if (ok && terms.length) {
       const hay = `${b.name} ${b.url} ${b.description} ${folderPath(b.folderId)}`.toLowerCase();
@@ -607,15 +663,17 @@ function filterGrid() {
     if (ok) shown++;
   }
 
-  $('#view-title').textContent = S.view === null ? 'All crumbs' : S.view === 0 ? 'Uncategorized' : folderPath(S.view);
+  const trash = S.view === 'trash';
+  $('#view-title').textContent = S.view === null ? 'All crumbs' : S.view === 0 ? 'Uncategorized' : trash ? 'Trash' : folderPath(S.view);
   $('#view-clear').hidden = S.view === null;
-  $('#view-count').textContent = S.q.trim()
+  $('#view-empty').hidden = !trash || !S.trash.length;
+  $('#view-count').textContent = (S.q.trim()
     ? `${shown} result${shown === 1 ? '' : 's'} for “${S.q.trim()}”`
-    : `${shown} crumb${shown === 1 ? '' : 's'}`;
+    : `${shown} crumb${shown === 1 ? '' : 's'}`) + (trash ? ` · deleted for good after ${S.trashDays} days` : '');
   const empty = $('#empty');
   empty.hidden = shown > 0;
-  empty.textContent = !S.list.length
-    ? 'No crumbs yet. Hit “Add” and drop your first one.'
+  empty.textContent = trash ? (S.q.trim() ? 'Nothing in the trash matches that.' : 'The trash is empty.')
+    : !S.list.length ? 'No crumbs yet. Hit “Add” and drop your first one.'
     : S.q.trim() ? 'No crumbs match that.' : 'This folder is empty.';
 }
 
@@ -626,6 +684,41 @@ function selectView(v) {
   if (!wide()) setSidebar(false);
 }
 $('#view-clear').addEventListener('click', () => selectView(null));
+
+// ---------- trash ----------
+
+async function trashBookmark(b) {
+  await api('DELETE', `/api/bookmarks/${b.id}`);
+  await loadBookmarks();
+  toast('Moved to the trash', { label: 'Undo', fn: () => restoreBookmark(b, true) });
+}
+
+async function restoreBookmark(b, quiet = false) {
+  try {
+    await api('POST', `/api/bookmarks/${b.id}/restore`);
+    await loadBookmarks();
+    if (!quiet) toast('Crumb restored', { label: 'Show', fn: () => selectView(b.folderId && S.fmap.has(b.folderId) ? b.folderId : 0) });
+  } catch (err) { toast(err.message); }
+}
+
+async function deleteForever(b) {
+  if (!(await ask({ title: 'Delete forever?', text: `“${b.name}” and its thumbnail will be gone for good.`, ok: 'Delete forever' }))) return;
+  try {
+    await api('DELETE', `/api/bookmarks/${b.id}?forever=1`);
+    await loadBookmarks();
+    toast('Deleted forever');
+  } catch (err) { toast(err.message); }
+}
+
+$('#view-empty').addEventListener('click', async () => {
+  const n = S.trash.length;
+  if (!(await ask({ title: 'Empty the trash?', text: `${n} crumb${n === 1 ? '' : 's'} will be deleted for good. This can't be undone.`, ok: 'Empty trash' }))) return;
+  try {
+    await api('DELETE', '/api/trash');
+    await loadBookmarks();
+    toast('Trash emptied');
+  } catch (err) { toast(err.message); }
+});
 
 // Bookmarklet support: http://pi:9099/?add=<url>
 function handleAddParam() {
@@ -638,11 +731,39 @@ function handleAddParam() {
 
 // ---------- sidebar ----------
 
+// Smoothly move the cards when the layout jumps (sidebar opening/closing):
+// remember where every visible card was, change the layout in one go, then
+// animate each card from its old box to its new one (FLIP).
+function flipLayout(change) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { change(); return; }
+  const vh = innerHeight;
+  const first = new Map();
+  for (const el of document.querySelectorAll('#grid > .card:not([hidden]), .view-head')) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom > -100 && r.top < vh + 100) first.set(el, r);
+  }
+  change();
+  for (const [el, a] of first) {
+    const b = el.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    const sx = el.classList.contains('card') ? a.width / b.width : 1;
+    const sy = el.classList.contains('card') ? a.height / b.height : 1;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) continue;
+    el.animate([
+      { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      { transformOrigin: '0 0', transform: 'none' },
+    ], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  }
+}
+
 function setSidebar(open, remember = true) {
-  document.body.classList.toggle('side-open', open);
+  const apply = () => {
+    document.body.classList.toggle('side-open', open);
+    $('#scrim').hidden = !open;
+  };
+  if (remember && wide()) flipLayout(apply); else apply();
   $('#menu-btn').setAttribute('aria-expanded', String(open));
   $('#menu-btn').setAttribute('aria-label', open ? 'Hide folders' : 'Show folders');
-  $('#scrim').hidden = !open;
   if (remember && wide()) { prefs.sideOpen = open; savePrefs(); }
 }
 $('#menu-btn').addEventListener('click', () => setSidebar(!document.body.classList.contains('side-open')));
@@ -674,15 +795,22 @@ function renderTree() {
     if (!tabsIn.has(key)) tabsIn.set(key, []);
     tabsIn.get(key).push(b);
   }
-
-  const all = h('div', { class: 'ti' + (S.view === null ? ' active' : '') },
+  const simpleRow = (view, ic, label, count) => h('div', { class: 'ti' + (S.view === view ? ' active' : '') },
     h('span', { class: 'twisty none' }),
-    icon('all', 'ico'),
-    h('button', { type: 'button', class: 'label', text: 'All crumbs', onclick: () => selectView(null) }),
-    h('span', { class: 'count', text: String(S.list.length) }));
+    icon(ic, 'ico'),
+    h('button', { type: 'button', class: 'label', text: label, onclick: () => selectView(view) }),
+    h('span', { class: 'count', text: String(count) }));
 
   const top = (S.kids.get(0) || []).map((f) => folderNode(f, 0, tabsIn));
-  $('#tree').replaceChildren(all, h('div', { class: 'tree-sep' }), ...top, uncategorizedNode(tabsIn.get(0) || []));
+  const parts = [
+    simpleRow(null, 'all', 'All crumbs', S.list.length),
+    uncategorizedNode(tabsIn.get(0) || []),
+    simpleRow('trash', 'trash', 'Trash', S.trash.length),
+    h('div', { class: 'tree-sep' }),
+    ...top,
+  ];
+  if (!top.length) parts.push(h('div', { class: 'tree-empty', text: 'No folders yet. Use “Add folder”.' }));
+  $('#tree').replaceChildren(...parts);
 }
 
 function folderNode(f, depth, tabsIn) {
@@ -696,14 +824,15 @@ function folderNode(f, depth, tabsIn) {
   const tw = twisty(hasKids, collapsed, () => toggleNode(node, tw, (c) => {
     if (c) treeState.open.delete(f.id); else treeState.open.add(f.id);
   }));
-  const row = h('div', { class: 'ti folder' + (S.view === f.id ? ' active' : '') },
+  const row = h('div', { class: 'ti folder' + (S.view === f.id ? ' active' : ''), title: 'Drag to move' },
     tw,
-    icon('folder', 'ico'),
+    folderIcon(f),
     h('button', { type: 'button', class: 'label', text: f.name, title: folderPath(f.id), onclick: () => selectView(f.id) }),
     h('span', { class: 'count', text: String(S.totals.get(f.id) || 0) }),
     h('span', { class: 'acts' },
       actBtn('plus', 'New folder inside', () => openFolderDialog(null, f.id)),
       actBtn('edit', 'Edit folder', () => openFolderDialog(f))));
+  folderDrag(row, f);
 
   const inner = h('div', { class: 'inner' },
     ...subs.map((s) => folderNode(s, depth + 1, tabsIn)),
@@ -735,6 +864,69 @@ function tabRow(b, depth) {
     h('span', { class: 'acts' }, actBtn('edit', 'Edit bookmark', () => openEditor(b))));
   row.style.setProperty('--depth', depth);
   return row;
+}
+
+// ---- drag folders to reorder them ----
+// Drop on the top part of a folder = put it above, bottom part = below,
+// middle = put it inside.
+
+let dragFolder = null;
+
+function clearDropMarks() {
+  document.querySelectorAll('.drop-before, .drop-after, .drop-into')
+    .forEach((el) => el.classList.remove('drop-before', 'drop-after', 'drop-into'));
+}
+
+function folderDrag(row, f) {
+  row.draggable = true;
+  row.addEventListener('dragstart', (e) => {
+    dragFolder = f.id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', f.name);
+    requestAnimationFrame(() => row.classList.add('dragging'));
+  });
+  row.addEventListener('dragend', () => {
+    dragFolder = null;
+    row.classList.remove('dragging');
+    clearDropMarks();
+  });
+  row.addEventListener('dragover', (e) => {
+    if (dragFolder == null || subtree(dragFolder).has(f.id)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const r = row.getBoundingClientRect();
+    const y = (e.clientY - r.top) / r.height;
+    const zone = y < 0.3 ? 'before' : y > 0.7 ? 'after' : 'into';
+    if (!row.classList.contains('drop-' + zone)) { clearDropMarks(); row.classList.add('drop-' + zone); }
+    row.dataset.zone = zone;
+  });
+  row.addEventListener('dragleave', (e) => {
+    if (!row.contains(e.relatedTarget)) row.classList.remove('drop-before', 'drop-after', 'drop-into');
+  });
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const zone = row.dataset.zone;
+    clearDropMarks();
+    if (dragFolder != null && dragFolder !== f.id) moveFolder(dragFolder, f, zone);
+  });
+}
+
+async function moveFolder(id, target, zone) {
+  let parentId, ids;
+  if (zone === 'into') {
+    parentId = target.id;
+    ids = [...(S.kids.get(target.id) || []).map((x) => x.id).filter((x) => x !== id), id];
+    treeState.open.add(target.id);
+    saveTree();
+  } else {
+    parentId = target.parentId && S.fmap.has(target.parentId) ? target.parentId : null;
+    ids = (S.kids.get(parentId || 0) || []).map((x) => x.id).filter((x) => x !== id);
+    ids.splice(ids.indexOf(target.id) + (zone === 'after' ? 1 : 0), 0, id);
+  }
+  try {
+    await api('PUT', '/api/folders/order', { parentId, ids });
+    await loadBookmarks();
+  } catch (err) { toast(err.message); }
 }
 
 // ---------- image handling (runs in the browser) ----------
@@ -1067,17 +1259,15 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
+// Delete = move to the trash (with Undo); nothing is lost right away.
 $('#edit-delete').addEventListener('click', async () => {
-  const id = ed.id;
-  const label = F('name').value || F('url').value;
-  if (!(await ask({ title: 'Delete this crumb?', text: `“${label}” will be gone for good.`, ok: 'Delete' }))) return;
+  const b = S.list.find((x) => x.id === ed.id);
+  if (!b) return;
   try {
-    await api('DELETE', `/api/bookmarks/${id}`);
     dlg.close();
-    await loadBookmarks();
-    toast('Crumb deleted');
+    await trashBookmark(b);
   } catch (err) {
-    showError('#edit-error', err.message);
+    toast(err.message);
   }
 });
 
@@ -1091,7 +1281,7 @@ let fd = null;
 function openFolderDialog(folder = null, parentId = null) {
   if (fd) fd.resolve(null);
   return new Promise((resolve) => {
-    fd = { folder, resolve, result: null };
+    fd = { folder, resolve, result: null, color: folder ? folder.color || '' : '', icon: folder ? folder.icon || '' : '' };
     fform.reset();
     showError('#folder-error', '');
     $('#folder-title').textContent = folder ? 'Edit folder' : 'Add folder';
@@ -1103,18 +1293,37 @@ function openFolderDialog(folder = null, parentId = null) {
       exclude: folder ? subtree(folder.id) : new Set(),
       rootLabel: 'Top level',
     });
+    renderFolderLook();
     fdlg.showModal();
     field(fform, 'name').focus();
   });
 }
 fdlg.addEventListener('close', () => { if (fd) { fd.resolve(fd.result); fd = null; } });
 
+// Color swatches and icon choices in the folder dialog.
+function renderFolderLook() {
+  $('#folder-colors').replaceChildren(...FOLDER_COLORS.map((c) => {
+    const b = h('button', {
+      type: 'button', class: 'swatch' + (c ? '' : ' none') + (fd.color === c ? ' on' : ''),
+      title: c || 'No color', 'aria-label': c ? `Color ${c}` : 'No color', 'aria-pressed': String(fd.color === c),
+      onclick: () => { fd.color = c; renderFolderLook(); },
+    });
+    if (c) b.style.setProperty('--sw', c);
+    return b;
+  }));
+  $('#folder-icons').replaceChildren(...Object.keys(FOLDER_ICONS).map((k) => h('button', {
+    type: 'button', class: 'icon-opt' + ((fd.icon || 'folder') === k ? ' on' : ''),
+    title: k, 'aria-label': `Icon ${k}`, 'aria-pressed': String((fd.icon || 'folder') === k),
+    onclick: () => { fd.icon = k === 'folder' ? '' : k; renderFolderLook(); },
+  }, folderIcon({ icon: k, color: fd.color }, ''))));
+}
+
 fform.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = field(fform, 'name').value.trim();
   if (!name) { showError('#folder-error', 'Give the folder a name.'); return; }
   const p = $('#folder-parent').value;
-  const body = { name, parentId: p ? Number(p) : null };
+  const body = { name, parentId: p ? Number(p) : null, color: fd.color, icon: fd.icon };
   const btn = $('#folder-save');
   const isNew = !fd.folder;
   busy(btn, true, 'Saving…');
