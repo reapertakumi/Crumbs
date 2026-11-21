@@ -1,0 +1,15 @@
+services:
+  crumbs:
+    build: .
+    image: crumbs:latest
+    container_name: crumbs
+    restart: unless-stopped
+    ports:
+      - "9099:9099"
+    volumes:
+      # Database and thumbnails live here. Back up this folder.
+      - ./data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M

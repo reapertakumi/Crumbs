@@ -1,0 +1,95 @@
+// Crumbs: a tiny visual bookmark manager for the Raspberry Pi 5.
+package main
+
+import (
+	"embed"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+//go:embed web
+var webFS embed.FS
+
+func main() {
+	dataDir := envOr("DATA_DIR", "/data")
+	addr := envOr("ADDR", ":9099")
+
+	imgDir := filepath.Join(dataDir, "img")
+	if err := os.MkdirAll(imgDir, 0o755); err != nil {
+		log.Fatalf("create data dir: %v", err)
+	}
+
+	db, err := openDB(filepath.Join(dataDir, "crumbs.db"))
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+
+	app := &App{db: db, imgDir: imgDir, limiter: newLimiter()}
+	app.loadSettings()
+	go app.janitor()
+
+	static, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mux := http.NewServeMux()
+	app.routes(mux, static)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           app.secure(mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	log.Printf("Crumbs is listening on %s (data in %s)", addr, dataDir)
+	log.Fatal(srv.ListenAndServe())
+}
+
+func (a *App) routes(mux *http.ServeMux, static fs.FS) {
+	files := http.FileServerFS(static)
+	mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		files.ServeHTTP(w, r)
+	}))
+
+	// Session and accounts
+	mux.HandleFunc("GET /api/state", a.handleState)
+	mux.HandleFunc("POST /api/setup", a.handleSetup)
+	mux.HandleFunc("POST /api/login", a.handleLogin)
+	mux.HandleFunc("POST /api/logout", a.handleLogout)
+	mux.HandleFunc("POST /api/password", a.user(a.handlePassword))
+
+	// Bookmarks
+	mux.HandleFunc("GET /api/bookmarks", a.user(a.handleListBookmarks))
+	mux.HandleFunc("POST /api/bookmarks", a.user(a.handleCreateBookmark))
+	mux.HandleFunc("PUT /api/bookmarks/{id}", a.user(a.handleUpdateBookmark))
+	mux.HandleFunc("DELETE /api/bookmarks/{id}", a.user(a.handleDeleteBookmark))
+	mux.HandleFunc("PUT /api/bookmarks/{id}/{kind}", a.user(a.handlePutImage))
+	mux.HandleFunc("DELETE /api/bookmarks/{id}/{kind}", a.user(a.handleDeleteImage))
+	mux.HandleFunc("GET /img/{id}/{kind}", a.user(a.handleGetImage))
+
+	// Link previews
+	mux.HandleFunc("GET /api/meta", a.user(a.handleMeta))
+	mux.HandleFunc("GET /api/fetch", a.user(a.handleFetch))
+
+	// Admin
+	mux.HandleFunc("GET /api/users", a.admin(a.handleListUsers))
+	mux.HandleFunc("POST /api/users", a.admin(a.handleCreateUser))
+	mux.HandleFunc("DELETE /api/users/{id}", a.admin(a.handleDeleteUser))
+	mux.HandleFunc("PUT /api/users/{id}/password", a.admin(a.handleResetPassword))
+	mux.HandleFunc("PUT /api/settings", a.admin(a.handleSettings))
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}

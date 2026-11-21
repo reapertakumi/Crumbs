@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Crumbs</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+
+  <!-- Sign in / first-run setup -->
+  <main id="auth" class="auth" hidden>
+    <form id="auth-form" class="auth-card" autocomplete="on">
+      <img src="/icon.svg" alt="" class="auth-logo">
+      <h1>Crumbs</h1>
+      <p id="auth-sub" class="muted"></p>
+      <label>Username
+        <input name="username" autocomplete="username" maxlength="32" required>
+      </label>
+      <label>Password
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <label id="auth-confirm" hidden>Repeat password
+        <input name="confirm" type="password" autocomplete="new-password">
+      </label>
+      <p id="auth-error" class="error" hidden></p>
+      <button class="btn primary" type="submit" id="auth-submit">Sign in</button>
+      <button class="btn ghost" type="button" id="auth-back" hidden>Back to crumbs</button>
+    </form>
+  </main>
+
+  <!-- The app -->
+  <div id="app" hidden>
+    <header class="top">
+      <a class="brand" href="/"><img src="/icon.svg" alt=""><span>Crumbs</span></a>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search crumbs…" autocomplete="off" aria-label="Search bookmarks">
+      </div>
+      <div class="top-right">
+        <button class="btn primary" type="button" id="add-btn">+ Add</button>
+        <span class="who" id="who"></span>
+        <button class="icon-btn" type="button" id="settings-btn" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <button class="btn ghost" type="button" id="signout-btn">Sign out</button>
+        <button class="btn" type="button" id="signin-btn">Sign in</button>
+      </div>
+    </header>
+    <nav id="folders" class="folders" aria-label="Folders"></nav>
+    <section id="grid" class="grid" aria-live="polite"></section>
+    <p id="empty" class="empty" hidden></p>
+  </div>
+
+  <!-- Add / edit a bookmark -->
+  <dialog id="edit">
+    <form id="edit-form" class="modal-body" novalidate>
+      <div class="modal-head">
+        <h2 id="edit-title">Add crumb</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <div class="thumb-edit">
+        <div class="thumb-preview" id="tp">
+          <img id="tp-img" alt="" hidden>
+          <span id="tp-status"></span>
+        </div>
+        <div class="thumb-actions">
+          <button type="button" class="btn small" id="tp-refetch">Fetch preview</button>
+          <label class="btn small file-btn">Upload image<input type="file" id="tp-file" accept="image/*" hidden></label>
+          <button type="button" class="btn small" id="tp-remove" hidden>Remove image</button>
+          <span class="muted small hint">or paste / drop an image</span>
+        </div>
+      </div>
+
+      <label>URL
+        <input name="url" placeholder="https://…" inputmode="url" autocomplete="off" spellcheck="false" required>
+      </label>
+      <label>Name
+        <span class="with-icon"><img id="fav-img" alt="" hidden><input name="name" maxlength="300" placeholder="Fetched from the page"></span>
+      </label>
+      <label>Description
+        <textarea name="description" rows="3" maxlength="2000" placeholder="Optional"></textarea>
+      </label>
+      <label>Folder
+        <input name="folder" list="folder-list" maxlength="100" placeholder="No folder" autocomplete="off">
+      </label>
+      <datalist id="folder-list"></datalist>
+
+      <p class="error" id="edit-error" hidden></p>
+      <div class="row">
+        <button type="button" class="btn" id="edit-delete" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="edit-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settings">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <form id="pw-form">
+        <h3>Change password</h3>
+        <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
+        <div class="grid2">
+          <label>New password<input type="password" name="new" autocomplete="new-password" minlength="6" required></label>
+          <label>Repeat new password<input type="password" name="confirm" autocomplete="new-password" required></label>
+        </div>
+        <p class="error" id="pw-error" hidden></p>
+        <button class="btn" type="submit">Update password</button>
+      </form>
+
+      <div id="admin-sec" hidden>
+        <div class="section">
+          <h3>Access</h3>
+          <label class="switch"><input type="checkbox" id="login-req"> Require login</label>
+          <p class="muted small" id="login-note"></p>
+        </div>
+        <div class="section">
+          <h3>Users</h3>
+          <ul class="user-list" id="user-list"></ul>
+          <form id="user-form">
+            <div class="grid2">
+              <label>Username<input name="username" maxlength="32" required autocomplete="off"></label>
+              <label>Password<input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+            </div>
+            <label class="check"><input type="checkbox" name="isAdmin"> Make admin</label>
+            <p class="error" id="user-error" hidden></p>
+            <button class="btn" type="submit">Add user</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Confirm / prompt -->
+  <dialog id="ask" class="ask">
+    <form method="dialog" class="modal-body" id="ask-form">
+      <h2 id="ask-title"></h2>
+      <p id="ask-text" class="muted"></p>
+      <input id="ask-input" hidden>
+      <div class="row rev">
+        <button class="btn primary" value="ok" id="ask-ok">OK</button>
+        <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+        <span class="spacer"></span>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
