@@ -2844,12 +2844,28 @@ function setScale(px) {
 }
 
 $('#set-scale').addEventListener('input', (e) => setScale(Number(e.target.value)));
-$('#theme-btn').addEventListener('click', () => {
+$('#theme-btn').addEventListener('click', (e) => {
   const t = THEME_ORDER.includes(prefs.theme) ? prefs.theme : 'system';
   prefs.theme = THEME_ORDER[(THEME_ORDER.indexOf(t) + 1) % 3];
   savePrefs();
-  applyPrefs();
-  if ($('#settings').open) renderSettings();
+  const btn = e.currentTarget;
+  const swap = () => {
+    applyPrefs();
+    if ($('#settings').open) renderSettings();
+    btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin');
+  };
+  // The new look spreads out in a circle from the button, where the browser
+  // can do it and the user hasn't asked for less motion; otherwise colors fade.
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!document.startViewTransition || calm) { swap(); return; }
+  const r = btn.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+  document.startViewTransition(swap).ready.then(() => {
+    document.documentElement.animate(
+      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] },
+      { duration: 550, easing: 'cubic-bezier(.2, .8, .2, 1)', pseudoElement: '::view-transition-new(root)' });
+  });
 });
 DARK_MQ.addEventListener('change', () => { if (prefs.theme === 'system') applyPrefs(); });
 $('#set-palette').addEventListener('change', (e) => { prefs.palette = e.target.value; savePrefs(); applyPrefs(); });

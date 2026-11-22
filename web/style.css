@@ -761,3 +761,10 @@ dialog { overscroll-behavior: contain; }
 
 /* ---------- v11: Refresh menu in the selection bar opens upwards ---------- */
 .selbar .sel-dd .menu { top: auto; bottom: calc(100% + 10px); transform-origin: bottom left; min-width: 200px; }
+
+/* Theme toggle: the icon turns in, and the new look spreads from the button. */
+#theme-btn.spin svg { animation: theme-spin .5s cubic-bezier(.2, .8, .2, 1); }
+@keyframes theme-spin { from { transform: rotate(-120deg) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html { transition: background-color .3s, color .3s; }
+@media (prefers-reduced-motion: reduce) { #theme-btn.spin svg { animation: none; } html { transition: none; } }
