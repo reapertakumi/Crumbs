@@ -1489,6 +1489,7 @@ function openEditor(b = null, presetUrl = '') {
   setStatus(b ? (b.thumb ? '' : 'No thumbnail yet') : 'Paste a link to fetch a preview');
   setFav(b && b.icon ? b.icon : null);
   dlg.showModal();
+  ed.snapshot = editorSnapshot(); // to notice unsaved changes
   if (presetUrl) {
     F('url').value = presetUrl;
     fetchPreview();
@@ -2815,6 +2816,26 @@ $('#remove-all').addEventListener('click', async () => {
 // Clicking outside Profile, Admin or Settings (on the dimmed backdrop) closes
 // it. Both the press and the release must be on the backdrop, so dragging a
 // text selection out of the window doesn't close it by accident.
+// The bookmark editor closes on an outside click too, but asks first when
+// something was changed (typed, picked a folder or tag, a new picture…).
+function editorSnapshot() {
+  return JSON.stringify([F('url').value, F('name').value, F('description').value, F('folder').value, ed ? ed.tags : []]);
+}
+function editorChanged() {
+  return !!ed && (editorSnapshot() !== ed.snapshot || ed.thumb !== undefined || tagEntry.value.trim() !== '');
+}
+{
+  let downOnBackdrop = false;
+  dlg.addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === dlg; });
+  dlg.addEventListener('click', async (e) => {
+    const outside = downOnBackdrop && e.target === dlg;
+    downOnBackdrop = false;
+    if (!outside) return;
+    if (editorChanged() && !(await ask({ title: 'Discard your changes?', text: 'You changed this bookmark but did not save it.', ok: 'Discard' }))) return;
+    dlg.close();
+  });
+}
+
 for (const id of ['#profile', '#admin', '#settings']) {
   const d = $(id);
   let downOnBackdrop = false;
