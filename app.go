@@ -21,6 +21,10 @@ type App struct {
 	avatarDir     string
 	loginRequired atomic.Bool
 	registration  atomic.Bool
+	// the encrypted database: closed until unlock() succeeds
+	ready       atomic.Bool
+	unlockMu    sync.Mutex
+	afterUnlock sync.Once
 	setupMu       sync.Mutex
 	limiter       *limiter
 }

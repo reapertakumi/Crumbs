@@ -42,6 +42,26 @@
     </form>
   </main>
 
+  <!-- Encrypted database: unlock it, or choose its key -->
+  <main id="lock" class="auth" hidden>
+    <form id="lock-form" class="auth-card" autocomplete="off">
+      <div class="lock-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/></svg>
+      </div>
+      <h1 id="lock-title">Crumbs is locked</h1>
+      <p id="lock-sub" class="muted"></p>
+      <div id="lock-admin" hidden>
+        <label>Admin username<input name="username" autocomplete="username"></label>
+        <label>Admin password<input name="password" type="password" autocomplete="current-password"></label>
+      </div>
+      <label>Database key<input name="key" type="password" autocomplete="new-password" required></label>
+      <label id="lock-confirm" hidden>Repeat the key<input name="confirm" type="password" autocomplete="new-password"></label>
+      <p class="muted small" id="lock-note"></p>
+      <p id="lock-error" class="error" hidden></p>
+      <button class="btn primary" type="submit" id="lock-submit">Unlock</button>
+    </form>
+  </main>
+
   <!-- The app -->
   <div id="app" hidden>
     <header class="top" id="top">

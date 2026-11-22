@@ -8,12 +8,19 @@ services:
     container_name: crumbs
     restart: unless-stopped
     ports:
-      - "9099:9099"
+      - "9099:9099"   # http://
+      - "9443:9443"   # https:// (self-signed unless you give your own certificate)
     volumes:
-      # Database, thumbnails, photos and backups (data/backups) live here.
+      # Database (encrypted), thumbnails, photos, backups and the HTTPS certificate live here.
       - ./data:/data
       # Use the Pi's time zone, so the nightly backup runs at 3:00 your time.
       - /etc/localtime:/etc/localtime:ro
+    environment:
+      # All optional; set them in a file called .env next to this one (see .env.example).
+      CRUMBS_DB_KEY: ${CRUMBS_DB_KEY:-}     # empty = unlock in the browser after each start
+      TLS_HOSTS: ${TLS_HOSTS:-}             # names/IPs for the self-signed certificate
+      HTTP_REDIRECT: ${HTTP_REDIRECT:-0}    # 1 = send http:// visitors to https://
+      HTTPS_PUBLIC_PORT: ${HTTPS_PUBLIC_PORT:-9443}
     deploy:
       resources:
         limits:

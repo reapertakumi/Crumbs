@@ -2,9 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite, no CGO needed on the Pi
+	// Pure-Go SQLite (no CGO needed on the Pi) with an encrypting VFS.
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/vfs/adiantum"
 )
 
 const schema = `
@@ -70,22 +73,42 @@ INSERT OR IGNORE INTO settings(key, value) VALUES ('login_required', '1');
 INSERT OR IGNORE INTO settings(key, value) VALUES ('registration', '0');
 `
 
-func openDB(path string) (*sql.DB, error) {
-	dsn := "file:" + path +
-		"?_pragma=journal_mode(WAL)" +
-		"&_pragma=busy_timeout(5000)" +
+// dsnFor builds the connection string. With a key the file is encrypted with
+// the adiantum VFS (the whole file: tables, indexes, the write-ahead log).
+// The key is set first, then busy timeout and locking, as the driver asks.
+func dsnFor(path, hexKey string) string {
+	q := "file:" + path + "?"
+	if hexKey != "" {
+		q += "vfs=adiantum&hexkey=" + hexKey + "&"
+	}
+	return q + "_pragma=busy_timeout(5000)" +
+		"&_pragma=journal_mode(WAL)" +
 		"&_pragma=foreign_keys(1)" +
-		"&_pragma=synchronous(NORMAL)"
-	db, err := sql.Open("sqlite", dsn)
+		"&_pragma=synchronous(NORMAL)" +
+		"&_pragma=temp_store(memory)" // keeps temp data in RAM, not in unencrypted temp files
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
 	// One connection is plenty for a home server and avoids SQLITE_BUSY.
 	// Never run a query while iterating rows from another one.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	// The first real read fails here when the key is wrong.
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master`).Scan(&n); err != nil {
 		db.Close()
 		return nil, err
+	}
+	for _, stmt := range strings.Split(schema, ";\n") {
+		if stmt = strings.TrimSpace(stmt); stmt != "" {
+			if _, err := db.Exec(stmt); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
 	}
 	if err := migrate(db); err != nil {
 		db.Close()

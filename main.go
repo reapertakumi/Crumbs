@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,7 @@ var webFS embed.FS
 func main() {
 	dataDir := envOr("DATA_DIR", "/data")
 	addr := envOr("ADDR", ":9099")
+	httpsAddr := envOr("HTTPS_ADDR", ":9443") // "off" turns HTTPS off
 
 	imgDir := filepath.Join(dataDir, "img")
 	avatarDir := filepath.Join(dataDir, "avatars")
@@ -26,36 +28,59 @@ func main() {
 		}
 	}
 
-	db, err := openDB(filepath.Join(dataDir, "crumbs.db"))
-	if err != nil {
-		log.Fatalf("open database: %v", err)
-	}
-
-	app := &App{db: db, dataDir: dataDir, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter(),
+	app := &App{dataDir: dataDir, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter(),
 		links: &linkJobs{jobs: map[int64]*linkJob{}}}
-	app.loadSettings()
-	app.backfillSizes()
-	go app.janitor()
-	go app.backupLoop()
 
 	static, err := fs.Sub(webFS, "web")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	mux := http.NewServeMux()
 	app.routes(mux, static)
+	handler := app.secure(app.lockGate(mux))
 
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           app.secure(mux),
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+	server := func(addr string, h http.Handler) *http.Server {
+		return &http.Server{
+			Addr:              addr,
+			Handler:           h,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       60 * time.Second,
+			WriteTimeout:      60 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
 	}
-	log.Printf("Crumbs is listening on %s (data in %s)", addr, dataDir)
-	log.Fatal(srv.ListenAndServe())
+
+	// HTTPS (on by default) and HTTP side by side; HTTP_REDIRECT=1 sends HTTP to HTTPS.
+	httpHandler := handler
+	if httpsAddr != "off" {
+		cfg, err := app.tlsConfig()
+		if err != nil {
+			log.Printf("HTTPS is off: %v", err)
+		} else {
+			s := server(httpsAddr, handler)
+			s.TLSConfig = cfg
+			go func() {
+				log.Printf("Crumbs HTTPS is listening on %s", httpsAddr)
+				log.Fatal(s.ListenAndServeTLS("", ""))
+			}()
+			if os.Getenv("HTTP_REDIRECT") == "1" {
+				httpHandler = redirectToHTTPS(envOr("HTTPS_PUBLIC_PORT", strings.TrimPrefix(httpsAddr, ":")))
+			}
+		}
+	}
+
+	// The database is encrypted. With CRUMBS_DB_KEY (from .env) Crumbs opens it
+	// right away; otherwise the page shows Unlock until an admin types the key.
+	if key := os.Getenv("CRUMBS_DB_KEY"); key != "" {
+		if err := app.unlock(key); err != nil {
+			log.Printf("CRUMBS_DB_KEY didn't open the database (%v); waiting for an unlock in the browser", err)
+		}
+	} else {
+		log.Printf("the database is locked: open Crumbs in a browser and enter the key")
+	}
+
+	log.Printf("Crumbs HTTP is listening on %s (data in %s)", addr, dataDir)
+	log.Fatal(server(addr, httpHandler).ListenAndServe())
 }
 
 func (a *App) routes(mux *http.ServeMux, static fs.FS) {
@@ -67,6 +92,7 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 
 	// Session and accounts
 	mux.HandleFunc("GET /api/state", a.handleState)
+	mux.HandleFunc("POST /api/unlock", a.handleUnlock)
 	mux.HandleFunc("POST /api/setup", a.handleSetup)
 	mux.HandleFunc("POST /api/login", a.handleLogin)
 	mux.HandleFunc("POST /api/token", a.handleToken)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -54,13 +55,18 @@ func (a *App) makeBackup() (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	// A consistent copy of the live database (safe while Crumbs is running).
-	snap := filepath.Join(dir, ".snapshot.db")
-	os.Remove(snap)
-	if _, err := a.db.Exec(`VACUUM INTO ?`, snap); err != nil {
+	// A consistent copy of the live, encrypted database: hold the one
+	// connection so nothing writes, flush the write-ahead log into the file,
+	// then copy the file as it is. The copy stays encrypted with the same key.
+	ctx := context.Background()
+	conn, err := a.db.Conn(ctx)
+	if err != nil {
 		return "", err
 	}
-	defer os.Remove(snap)
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		return "", err
+	}
 
 	name := "crumbs-" + time.Now().Format("2006-01-02-150405") + ".zip"
 	partial := filepath.Join(dir, ".partial.zip")
@@ -69,7 +75,12 @@ func (a *App) makeBackup() (string, error) {
 		return "", err
 	}
 	zw := zip.NewWriter(f)
-	err = addToZip(zw, snap, "crumbs.db", zip.Deflate)
+	err = addToZip(zw, a.dbPath(), "crumbs.db", zip.Deflate)
+	if err == nil {
+		// The salt rebuilds the key from the passphrase; restore needs both.
+		err = addToZip(zw, a.saltPath(), "crumbs.db.salt", zip.Store)
+	}
+	conn.Close() // let Crumbs carry on while the pictures are zipped
 	for _, sub := range []string{"img", "avatars"} {
 		entries, _ := os.ReadDir(filepath.Join(a.dataDir, sub))
 		for _, e := range entries {

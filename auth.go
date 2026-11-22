@@ -215,6 +215,10 @@ type credsIn struct {
 }
 
 func (a *App) handleState(w http.ResponseWriter, r *http.Request) {
+	if !a.ready.Load() {
+		a.lockedState(w)
+		return
+	}
 	resp := struct {
 		Setup         bool  `json:"setup"`
 		LoginRequired bool  `json:"loginRequired"`

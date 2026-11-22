@@ -20,7 +20,8 @@ FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /out/crumbs /crumbs
 ENV DATA_DIR=/data \
-    ADDR=:9099
-EXPOSE 9099
+    ADDR=:9099 \
+    HTTPS_ADDR=:9443
+EXPOSE 9099 9443
 VOLUME /data
 ENTRYPOINT ["/crumbs"]

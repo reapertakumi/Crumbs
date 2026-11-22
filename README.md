@@ -130,8 +130,47 @@ There's nothing to compile: GitHub builds a ready-made image for the Pi (and for
 Prefer to compile on the Pi? In `docker-compose.yml`, comment out the `image:` line, uncomment `build: .` and run
 `docker compose up -d --build` (the first build takes a few minutes).
 
-Now open **`http://<your-pi-ip>:9099`** in any browser on your network, for example
-`http://raspberrypi.local:9099`. To find the Pi's IP, run `hostname -I` on the Pi.
+Now open **`http://<your-pi-ip>:9099`** or **`https://<your-pi-ip>:9443`** in any browser on your network, for
+example `https://raspberrypi.local:9443`. To find the Pi's IP, run `hostname -I` on the Pi.
+
+## Security: encrypted database and HTTPS
+
+### The database is encrypted
+
+`data/crumbs.db` (accounts, sessions, folders, bookmarks, tags, settings) is encrypted with a key only you know.
+Passwords inside it are additionally stored as salted hashes. Thumbnails, favicons and profile photos in
+`data/img` and `data/avatars` are not encrypted.
+
+**The first time** Crumbs starts with encryption, the page asks you to choose the **database key**:
+
+- On a new install, just pick a key (at least 8 characters).
+- If you already had Crumbs, sign in with an admin account and pick a key. Crumbs copies everything into a new
+  encrypted file, checks that nothing is missing, and only then removes the old unencrypted file.
+
+**Write the key down.** Without it nobody, not even you, can open your bookmarks or your backups.
+
+**After each start** Crumbs needs the key again. Pick one:
+
+- **Unlock in the browser** (safest): open Crumbs and type the key on the Unlock page. The key never touches the SD
+  card, so a stolen card is useless. Until someone unlocks it, Crumbs and its nightly backup wait.
+- **Automatic**: copy `.env.example` to `.env` next to `docker-compose.yml` and set `CRUMBS_DB_KEY=your key`. Crumbs
+  then unlocks itself at every start. Convenient, but someone with the whole SD card has the key too.
+
+Backups made after the switch are encrypted with the same key. Older backups from before are not encrypted;
+delete them from `data/backups` once you have a new one.
+
+### HTTP and HTTPS
+
+Crumbs answers on both at the same time, so everyone can choose:
+
+- `http://<pi>:9099` (plain)
+- `https://<pi>:9443` (encrypted connection)
+
+The first time, Crumbs makes its own **self-signed certificate** (`data/tls`). Browsers warn about it once
+("not private"); choose *Advanced → Continue* for your Pi. Put the names and IPs you use in `.env` as
+`TLS_HOSTS=raspberrypi.local,192.168.1.50`, then delete `data/tls` and restart to get a matching certificate.
+Have a real certificate? Mount it and set `TLS_CERT` and `TLS_KEY`. Set `HTTP_REDIRECT=1` to send everyone from
+`http://` to `https://`.
 
 ## Using Crumbs
 
@@ -208,7 +247,14 @@ The Pi doesn't resize or decode any images, so the server stays tiny.
 | Variable   | Default | What it does                                   |
 | ---------- | ------- | ---------------------------------------------- |
 | `ADDR`     | `:9099` | Address and port to listen on inside the container |
+| `HTTPS_ADDR` | `:9443` | HTTPS address inside the container (`off` turns HTTPS off) |
 | `DATA_DIR` | `/data` | Where the database and images are stored       |
+| `CRUMBS_DB_KEY` | (empty) | Database key; empty means "unlock in the browser" |
+| `TLS_HOSTS` | (empty) | Extra names/IPs for the self-signed certificate |
+| `TLS_CERT`, `TLS_KEY` | (empty) | Your own certificate and key files instead of the self-signed one |
+| `HTTP_REDIRECT` | `0` | `1` sends `http://` visitors to `https://` |
+
+These go in `.env` next to `docker-compose.yml` (see `.env.example`).
 
 To use another port, change the left side of `ports:` in `docker-compose.yml`, for example `"8080:9099"`.
 
@@ -218,14 +264,16 @@ Everything lives in the `./data` folder next to `docker-compose.yml`:
 
 ```text
 data/
-├── crumbs.db      # SQLite database: users, sessions, folders, bookmarks, settings
+├── crumbs.db      # SQLite database (encrypted): users, sessions, folders, bookmarks, settings
+├── crumbs.db.salt # needed with your key to open the database: keep it with the database
 ├── avatars/       # uploaded profile pictures
 ├── img/           # thumbnails and favicons
+├── tls/           # the self-signed HTTPS certificate
 └── backups/       # nightly backups (newest 7)
 ```
 
-**Backups** happen by themselves every night at 3:00 (the Pi's time zone). Each one is a `.zip` with the database,
-thumbnails, favicons and profile photos. Download them from **Admin → Backups**, or copy `data/backups` off the Pi
+**Backups** happen by themselves every night at 3:00 (the Pi's time zone). Each one is a `.zip` with the encrypted
+database and its salt, thumbnails, favicons and profile photos. Restoring needs your database key. Download them from **Admin → Backups**, or copy `data/backups` off the Pi
 from time to time, since a backup on the same SD card won't survive the card dying.
 
 **Restore a backup:**
@@ -233,7 +281,7 @@ from time to time, since a backup on the same SD card won't survive the card dyi
 ```bash
 docker compose stop
 mkdir restore && cd restore && unzip ../data/backups/crumbs-YYYY-MM-DD-HHMMSS.zip && cd ..
-cp restore/crumbs.db data/crumbs.db && rm -f data/crumbs.db-wal data/crumbs.db-shm
+cp restore/crumbs.db restore/crumbs.db.salt data/ && rm -f data/crumbs.db-wal data/crumbs.db-shm
 cp -r restore/img restore/avatars data/
 docker compose start
 ```
@@ -247,7 +295,12 @@ docker compose up -d
 ```
 
 **Forgot the admin password?** Ask another admin to reset it in **Admin → Users**. If you are the only
-admin, stop Crumbs, move `data/crumbs.db` somewhere safe, and start again to get a fresh setup screen.
+admin, stop Crumbs, move `data/crumbs.db` and `data/crumbs.db.salt` somewhere safe, and start again to get a fresh
+setup screen. **Forgot the database key?** Then the database can't be opened; that's the point of encrypting it.
+
+**Going back to before encryption:** the git tag `restore-before-encryption` is the last version without it. Your
+data from before is in the backups made before the switch (`git checkout restore-before-encryption`, build with
+`docker compose up -d --build`, and restore one of those backups).
 
 ## Project layout
 

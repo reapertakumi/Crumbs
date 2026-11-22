@@ -160,7 +160,7 @@ async function api(method, path, body) {
   if (!res.ok) {
     const err = new Error((data && data.error) || `${res.status} ${res.statusText}`);
     err.status = res.status;
-    if (res.status === 401 && path !== '/api/login') boot();
+    if ((res.status === 401 && path !== '/api/login') || res.status === 423) boot(); // 423: the database is locked
     throw err;
   }
   return data;
@@ -266,12 +266,63 @@ function formatBytes(n) {
   return `${(n / 1024 ** 3).toFixed(1)} GB`;
 }
 
+// ---------- the encrypted database: unlock it, or choose its key ----------
+
+let lockMode = null; // { setup, plain }
+
+function showLock(s) {
+  lockMode = s;
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  $('#app').hidden = true;
+  $('#auth').hidden = true;
+  $('#lock').hidden = false;
+  const f = $('#lock-form');
+  f.reset();
+  showError('#lock-error', '');
+  $('#lock-title').textContent = s.setup ? 'Choose a database key' : 'Crumbs is locked';
+  $('#lock-sub').textContent = s.setup
+    ? (s.plain
+        ? 'Crumbs now encrypts its database. Sign in as an admin and choose a key; your bookmarks are encrypted with it right away.'
+        : 'Your bookmarks and logins are stored encrypted. Choose the key that unlocks them.')
+    : 'Enter the database key to open Crumbs.';
+  $('#lock-note').textContent = s.setup
+    ? 'At least 8 characters. Write it down: without the key nobody, not even you, can open your bookmarks or backups. To unlock automatically when the Pi starts, put it in .env as CRUMBS_DB_KEY.'
+    : 'Tip: put the key in .env as CRUMBS_DB_KEY and Crumbs unlocks itself whenever the Pi starts.';
+  $('#lock-admin').hidden = !s.plain;
+  $('#lock-confirm').hidden = !s.setup;
+  field(f, 'confirm').required = !!s.setup;
+  field(f, 'username').required = !!s.plain;
+  field(f, 'password').required = !!s.plain;
+  $('#lock-submit').textContent = s.setup ? (s.plain ? 'Encrypt and open' : 'Set key and open') : 'Unlock';
+  field(f, s.plain ? 'username' : 'key').focus();
+}
+
+$('#lock-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.currentTarget;
+  const key = field(f, 'key').value;
+  if (lockMode && lockMode.setup && key !== field(f, 'confirm').value) return showError('#lock-error', 'The two keys do not match.');
+  const btn = $('#lock-submit');
+  busy(btn, true, lockMode && lockMode.plain ? 'Encrypting…' : 'Unlocking…');
+  try {
+    await api('POST', '/api/unlock', { key, username: field(f, 'username').value.trim(), password: field(f, 'password').value });
+    $('#lock').hidden = true;
+    await boot();
+  } catch (err) {
+    showError('#lock-error', err.message);
+  } finally {
+    busy(btn, false);
+  }
+});
+
 // ---------- boot & auth ----------
 
 async function boot() {
   let s;
   try { s = await api('GET', '/api/state'); }
   catch (e) { toast('Cannot reach Crumbs: ' + e.message); return; }
+  if (s.locked) return showLock(s);
+  $('#lock').hidden = true;
   S.me = s.user; S.guest = s.guest; S.loginRequired = s.loginRequired; S.registration = s.registration;
   if (s.setup) return showAuth('setup');
   if (!s.user) return showAuth('login');
