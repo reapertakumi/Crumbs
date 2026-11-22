@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
   <a href="#browser-extension">Browser extension</a> ·
+  <a href="#android-app">Android app</a> ·
   <a href="#features">Features</a> ·
   <a href="#documentation">Documentation</a> ·
   <a href="#how-to-find-crumbs-on-the-internet">The crumb story</a> ·
@@ -54,6 +55,22 @@ Save the page you're on with one click: thumbnail, favicon, name, link, folder a
 
 Connect it to your Pi once with your Crumbs address and sign-in. See
 [docs/using.md](docs/using.md#browser-extension).
+
+---
+
+## Android app
+
+Your Crumbs in an app, plus **Share → Crumbs** from any app on your phone (Chrome, YouTube, Reddit, …).
+
+<p>
+  <a href="https://github.com/reapertakumi/Crumbs-Android/releases/latest"><b>Download the APK</b></a> (latest release) ·
+  <a href="https://github.com/reapertakumi/Crumbs-Android">Source code</a>
+</p>
+
+- Saves offline first and syncs to your Pi when it's reachable, at home or over Tailscale.
+- Quick editor with thumbnail, folder, tags and description, or instant save with one tap.
+- Works with the encrypted database and HTTPS, stays signed in for a year, and updates itself from GitHub.
+- About 70 KB, with no tracking and no Google services.
 
 ---
 
