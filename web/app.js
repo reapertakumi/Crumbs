@@ -2684,6 +2684,53 @@ $('#set-newtab').addEventListener('change', (e) => {
   renderTree();
 });
 
+// ---- reset ----
+
+$('#reset-settings').addEventListener('click', async () => {
+  const ok = await ask({
+    title: 'Reset all settings?',
+    text: 'Theme, card size, layout, background (and its photo), sort order, sidebar and folder open/closed state go back to the defaults, and the duplicate rule is turned off. Your bookmarks, folders and account stay as they are.',
+    ok: 'Reset settings',
+  });
+  if (!ok) return;
+  try { ['crumbs.prefs', 'crumbs.tree', 'crumbs.bgimg'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
+  Object.assign(prefs, {
+    theme: 'system', size: 'm', layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
+  });
+  treeState.open.clear();
+  treeState.uncatClosed = false;
+  applyPrefs();
+  try {
+    if (dupMode()) {
+      const u = await api('PUT', '/api/me', { dedupe: '' });
+      if (S.guest) S.me.dedupe = u.dedupe; else refreshMe(u);
+    }
+  } catch (err) { toast(err.message); }
+  renderSortMenu();
+  buildCards();
+  renderTree();
+  renderSettings();
+  setSidebar(false, false);
+  toast('Settings reset');
+});
+
+$('#remove-all').addEventListener('click', async () => {
+  const n = S.list.length;
+  if (!n) { toast('There are no crumbs to remove'); return; }
+  const ok = await ask({
+    title: `Remove all ${n} crumb${n === 1 ? '' : 's'}?`,
+    text: 'Every crumb moves to the Trash, where you can restore it for 30 days. Folders and tags stay. To be sure, type REMOVE below.',
+    ok: 'Remove all',
+    input: { type: 'text', placeholder: 'REMOVE' },
+  });
+  if (ok == null) return;
+  if (ok.trim().toUpperCase() !== 'REMOVE') { toast('Nothing removed: type REMOVE to confirm'); return; }
+  const ids = S.list.map((b) => b.id);
+  $('#settings').close();
+  await bulk('trash', {}, ids);
+});
+
 // ---- duplicates (saved to the account, not the browser) ----
 // "" = off, "all" = a link only once anywhere, "folder" = only once per folder.
 

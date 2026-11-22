@@ -695,3 +695,11 @@ body.lassoing .card { transition: none; }
   .review-row { flex-direction: column; align-items: stretch; }
   .review-choice { width: 100% !important; }
 }
+
+/* ---------- v8: no sideways scrolling in the import review ---------- */
+#review-dlg, #review-dlg .modal-body, .review-list { overflow-x: hidden; }
+.review-row > * { min-width: 0; }
+.review-what input { width: 100%; max-width: 100%; }
+
+/* ---------- v8: reset section ---------- */
+.danger-row .btn { flex: none; }
