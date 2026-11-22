@@ -15,6 +15,8 @@ import (
 
 type App struct {
 	db            *sql.DB
+	dataDir       string
+	links         *linkJobs
 	imgDir        string
 	avatarDir     string
 	loginRequired atomic.Bool

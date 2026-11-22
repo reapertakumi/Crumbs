@@ -24,9 +24,15 @@ type Bookmark struct {
 	Created     int64  `json:"created"`
 	Updated     int64  `json:"updated"`
 	Deleted     int64  `json:"deleted,omitempty"` // when it went to the trash (0 = not in trash)
+	Tags        []string `json:"tags"`
+	ThumbManual bool     `json:"thumbManual"` // the user picked this thumbnail; "refresh all" leaves it alone
+	Link        int      `json:"link"`        // link check: 0 = not checked, 1 = works, 2 = broken
+	LinkError   string   `json:"linkError,omitempty"`
+	LinkChecked int64    `json:"linkChecked,omitempty"`
 }
 
-const bmCols = `id, folder_id, name, url, description, thumb_ver, icon_ver, created_at, updated_at, deleted_at`
+const bmCols = `id, folder_id, name, url, description, thumb_ver, icon_ver, created_at, updated_at, deleted_at,
+	tags, thumb_manual, link_status, link_error, link_checked`
 
 // Bookmarks in the trash are deleted for good after this long.
 const trashDays = 30
@@ -36,10 +42,14 @@ type scanner interface{ Scan(dest ...any) error }
 func scanBookmark(s scanner) (*Bookmark, error) {
 	var b Bookmark
 	var folder sql.NullInt64
-	var tv, iv int64
-	if err := s.Scan(&b.ID, &folder, &b.Name, &b.URL, &b.Description, &tv, &iv, &b.Created, &b.Updated, &b.Deleted); err != nil {
+	var tv, iv, manual int64
+	var tags string
+	if err := s.Scan(&b.ID, &folder, &b.Name, &b.URL, &b.Description, &tv, &iv, &b.Created, &b.Updated, &b.Deleted,
+		&tags, &manual, &b.Link, &b.LinkError, &b.LinkChecked); err != nil {
 		return nil, err
 	}
+	b.Tags = splitTags(tags)
+	b.ThumbManual = manual == 1
 	if folder.Valid {
 		f := folder.Int64
 		b.FolderID = &f
@@ -62,9 +72,52 @@ type bookmarkIn struct {
 	URL         string `json:"url"`
 	Description string `json:"description"`
 	FolderID    *int64 `json:"folderId"`
+	Tags        []string `json:"tags"`
+}
+
+// ---- tags ----
+// Stored on the bookmark as ",tag one,tag two," so a tag can be found with LIKE.
+
+func cleanTag(t string) string {
+	t = strings.TrimPrefix(strings.TrimSpace(t), "#")
+	t = strings.ReplaceAll(t, ",", " ")
+	return strings.ToLower(clip(oneLine(t), 40))
+}
+
+func cleanTags(in []string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, t := range in {
+		if t = cleanTag(t); t != "" && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+			if len(out) == 20 {
+				break
+			}
+		}
+	}
+	return out
+}
+
+func joinTags(t []string) string {
+	if len(t) == 0 {
+		return ""
+	}
+	return "," + strings.Join(t, ",") + ","
+}
+
+func splitTags(s string) []string {
+	out := []string{}
+	for _, t := range strings.Split(s, ",") {
+		if t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func (a *App) cleanBookmark(uid int64, in *bookmarkIn) error {
+	in.Tags = cleanTags(in.Tags)
 	u, err := parseHTTPURL(in.URL)
 	if err != nil {
 		return err
@@ -156,8 +209,8 @@ func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *
 		return
 	}
 	now := time.Now().Unix()
-	res, err := a.db.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, who.ID, nullID(in.FolderID), in.Name, in.URL, in.Description, now, now)
+	res, err := a.db.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, tags, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, who.ID, nullID(in.FolderID), in.Name, in.URL, in.Description, joinTags(in.Tags), now, now)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -190,8 +243,9 @@ func (a *App) handleUpdateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusConflict, err.Error())
 		return
 	}
-	res, err := a.db.Exec(`UPDATE bookmarks SET folder_id = ?, name = ?, url = ?, description = ?, updated_at = ?
-		WHERE id = ? AND user_id = ?`, nullID(in.FolderID), in.Name, in.URL, in.Description, time.Now().Unix(), id, who.ID)
+	res, err := a.db.Exec(`UPDATE bookmarks SET folder_id = ?, name = ?, description = ?, tags = ?, updated_at = ?,
+			link_status = CASE WHEN url = ? THEN link_status ELSE 0 END, url = ?
+		WHERE id = ? AND user_id = ?`, nullID(in.FolderID), in.Name, in.Description, joinTags(in.Tags), time.Now().Unix(), in.URL, in.URL, id, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -398,6 +452,10 @@ func (a *App) handlePutImage(w http.ResponseWriter, r *http.Request, who *Who) {
 	}
 	a.db.Exec(`UPDATE bookmarks SET `+col+` = ?, `+sizeCol+` = ? WHERE id = ? AND user_id = ?`,
 		time.Now().UnixMilli(), len(data), id, who.ID)
+	if kind == "thumb" {
+		// ?manual=1: the user uploaded or pasted this one, so "Refresh all previews" keeps it.
+		a.db.Exec(`UPDATE bookmarks SET thumb_manual = ? WHERE id = ?`, boolInt(r.URL.Query().Get("manual") == "1"), id)
+	}
 	b, err := a.getBookmark(who.ID, id)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
@@ -414,7 +472,7 @@ func (a *App) handleDeleteImage(w http.ResponseWriter, r *http.Request, who *Who
 		jsonErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	res, err := a.db.Exec(`UPDATE bookmarks SET `+col+` = 0, `+kind+`_size = 0 WHERE id = ? AND user_id = ?`, id, who.ID)
+	res, err := a.db.Exec(`UPDATE bookmarks SET `+col+` = 0, `+kind+`_size = 0, thumb_manual = CASE WHEN ? = 'thumb' THEN 0 ELSE thumb_manual END WHERE id = ? AND user_id = ?`, kind, id, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return

@@ -53,7 +53,12 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   updated_at  INTEGER NOT NULL,
   thumb_size  INTEGER NOT NULL DEFAULT 0,
   icon_size   INTEGER NOT NULL DEFAULT 0,
-  deleted_at  INTEGER NOT NULL DEFAULT 0
+  deleted_at  INTEGER NOT NULL DEFAULT 0,
+  tags         TEXT    NOT NULL DEFAULT '',
+  thumb_manual INTEGER NOT NULL DEFAULT 0,
+  link_status  INTEGER NOT NULL DEFAULT 0,
+  link_error   TEXT    NOT NULL DEFAULT '',
+  link_checked INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, created_at DESC);
 
@@ -101,6 +106,11 @@ func migrate(db *sql.DB) error {
 		{"bookmarks", "thumb_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "icon_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "deleted_at", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "tags", "TEXT NOT NULL DEFAULT ''"},
+		{"bookmarks", "thumb_manual", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "link_status", "INTEGER NOT NULL DEFAULT 0"},
+		{"bookmarks", "link_error", "TEXT NOT NULL DEFAULT ''"},
+		{"bookmarks", "link_checked", "INTEGER NOT NULL DEFAULT 0"},
 		{"folders", "color", "TEXT NOT NULL DEFAULT ''"},
 		{"folders", "icon", "TEXT NOT NULL DEFAULT ''"},
 		{"folders", "position", "INTEGER NOT NULL DEFAULT 0"},

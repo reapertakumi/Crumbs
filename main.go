@@ -31,10 +31,12 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 
-	app := &App{db: db, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter()}
+	app := &App{db: db, dataDir: dataDir, imgDir: imgDir, avatarDir: avatarDir, limiter: newLimiter(),
+		links: &linkJobs{jobs: map[int64]*linkJob{}}}
 	app.loadSettings()
 	app.backfillSizes()
 	go app.janitor()
+	go app.backupLoop()
 
 	static, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -79,6 +81,10 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("POST /api/bookmarks/{id}/restore", a.user(a.handleRestoreBookmark))
 	mux.HandleFunc("DELETE /api/trash", a.user(a.handleEmptyTrash))
 	mux.HandleFunc("POST /api/dedupe", a.user(a.handleDedupe))
+	mux.HandleFunc("POST /api/bookmarks/bulk", a.user(a.handleBulk))
+	mux.HandleFunc("POST /api/tags", a.user(a.handleTagEdit))
+	mux.HandleFunc("GET /api/linkcheck", a.user(a.handleLinkStatus))
+	mux.HandleFunc("POST /api/linkcheck", a.user(a.handleLinkCheck))
 	mux.HandleFunc("PUT /api/bookmarks/{id}/{kind}", a.user(a.handlePutImage))
 	mux.HandleFunc("DELETE /api/bookmarks/{id}/{kind}", a.user(a.handleDeleteImage))
 	mux.HandleFunc("GET /img/{id}/{kind}", a.user(a.handleGetImage))
@@ -112,6 +118,9 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("POST /api/users/{id}/import", a.admin(a.handleImportUser))
 	mux.HandleFunc("PUT /api/users/{id}/password", a.admin(a.handleResetPassword))
 	mux.HandleFunc("PUT /api/settings", a.admin(a.handleSettings))
+	mux.HandleFunc("GET /api/backups", a.admin(a.handleListBackups))
+	mux.HandleFunc("POST /api/backups", a.admin(a.handleMakeBackup))
+	mux.HandleFunc("GET /api/backups/{name}", a.admin(a.handleDownloadBackup))
 }
 
 func envOr(key, def string) string {

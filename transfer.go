@@ -18,6 +18,7 @@ type exportBookmark struct {
 	FolderID    *int64 `json:"folderId"`
 	Created     int64  `json:"created"`
 	Updated     int64  `json:"updated"`
+	Tags        []string `json:"tags"`
 }
 
 func (a *App) exportFor(w http.ResponseWriter, uid int64) {
@@ -26,7 +27,7 @@ func (a *App) exportFor(w http.ResponseWriter, uid int64) {
 		jsonErr(w, http.StatusNotFound, "no such user")
 		return
 	}
-	rows, err := a.db.Query(`SELECT name, url, description, folder_id, created_at, updated_at
+	rows, err := a.db.Query(`SELECT name, url, description, folder_id, created_at, updated_at, tags
 		FROM bookmarks WHERE user_id = ? AND deleted_at = 0 ORDER BY created_at, id`, uid)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
@@ -36,12 +37,14 @@ func (a *App) exportFor(w http.ResponseWriter, uid int64) {
 	for rows.Next() {
 		var b exportBookmark
 		var f *int64
-		if err := rows.Scan(&b.Name, &b.URL, &b.Description, &f, &b.Created, &b.Updated); err != nil {
+		var tags string
+		if err := rows.Scan(&b.Name, &b.URL, &b.Description, &f, &b.Created, &b.Updated, &tags); err != nil {
 			rows.Close()
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		b.FolderID = f
+		b.Tags = splitTags(tags)
 		list = append(list, b)
 	}
 	rows.Close()
@@ -62,6 +65,7 @@ type importItem struct {
 	Description string   `json:"description"`
 	Path        []string `json:"path"` // folder names from the top, e.g. ["Work", "Projects"]
 	Created     int64    `json:"created"`
+	Tags        []string `json:"tags"`
 }
 
 type importReq struct {
@@ -122,7 +126,7 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 	skipped := 0
 	var textBytes int64
 	for _, it := range in.Items {
-		c := clean{bookmarkIn: bookmarkIn{Name: it.Name, URL: it.URL, Description: it.Description}, created: it.Created}
+		c := clean{bookmarkIn: bookmarkIn{Name: it.Name, URL: it.URL, Description: it.Description, Tags: it.Tags}, created: it.Created}
 		if err := a.cleanBookmark(uid, &c.bookmarkIn); err != nil {
 			skipped++
 			continue
@@ -181,8 +185,8 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 		if created <= 0 || created > now {
 			created = now
 		}
-		if _, err := tx.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`, uid, nullID(ptrIf(parent)), it.Name, it.URL, it.Description, created, now); err != nil {
+		if _, err := tx.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, tags, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, uid, nullID(ptrIf(parent)), it.Name, it.URL, it.Description, joinTags(it.Tags), created, now); err != nil {
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}

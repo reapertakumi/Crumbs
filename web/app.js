@@ -38,6 +38,10 @@ const UI_ICONS = {
   swap: '<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',
   restore: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  alert: '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/>',
+  tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
+  download: '<path d="M12 4v11M7 10.5l5 5 5-5M4.5 20h15"/>',
 };
 
 // Profile picture choices: solid black & white glyphs (holes are cut out).
@@ -129,7 +133,7 @@ const saveTree = () => writeStore('crumbs.tree', { open: [...treeState.open], un
 
 const S = {
   me: null, guest: false, loginRequired: true, registration: false,
-  list: [], trash: [], trashDays: 30, folders: [],
+  list: [], trash: [], trashDays: 30, folders: [], sel: new Set(),
   fmap: new Map(),     // id -> folder
   kids: new Map(),     // parent id (0 = top) -> child folders
   totals: new Map(),   // folder id -> crumbs inside, including subfolders
@@ -606,11 +610,13 @@ function buildCards() {
 
 function card(b) {
   const host = hostOf(b.url);
+  const noDrag = { draggable: 'false' };
   const thumb = h('div', { class: 'thumb' },
     b.thumb
-      ? h('img', { src: b.thumb, alt: '', loading: 'lazy', decoding: 'async' })
+      ? h('img', { src: b.thumb, alt: '', loading: 'lazy', decoding: 'async', ...noDrag })
       : h('div', { class: 'thumb-empty' },
-          b.icon ? h('img', { src: b.icon, alt: '', loading: 'lazy' }) : h('span', { text: firstLetter(b.name || host) })));
+          b.icon ? h('img', { src: b.icon, alt: '', loading: 'lazy', ...noDrag }) : h('span', { text: firstLetter(b.name || host) })),
+    b.link === 2 && !b.deleted ? h('span', { class: 'badge-broken', title: b.linkError || 'This link seems broken' }, icon('alert'), 'Broken') : null);
   const folder = b.folderId && S.fmap.get(b.folderId);
   let tag = null;
   if (folder) {
@@ -618,10 +624,16 @@ function card(b) {
   }
   const body = h('div', { class: 'card-body' },
     h('div', { class: 'card-title' },
-      b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy' }) : null,
+      b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy', ...noDrag }) : null,
       h('span', { text: b.name })),
     h('div', { class: 'card-meta' }, h('span', { text: host }), tag),
     b.description ? h('p', { class: 'card-desc', text: b.description }) : null);
+
+  const tags = b.tags && b.tags.length
+    ? h('div', { class: 'card-tags' }, ...b.tags.slice(0, 5).map((t) => h('button', {
+        type: 'button', class: 'hash', text: '#' + t, title: `Show #${t}`, onclick: () => selectView('tag:' + t),
+      })))
+    : null;
 
   const actions = b.deleted
     ? h('div', { class: 'card-actions' },
@@ -629,9 +641,22 @@ function card(b) {
         h('button', { class: 'card-edit', type: 'button', title: 'Delete forever', 'aria-label': `Delete ${b.name} forever`, onclick: () => deleteForever(b) }, icon('trash')))
     : h('button', { class: 'card-edit', type: 'button', title: 'Edit', 'aria-label': `Edit ${b.name}`, onclick: () => openEditor(b) }, icon('edit'));
 
-  return h('article', { class: 'card' + (b.deleted ? ' trashed' : '') },
-    h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url }, thumb, body),
-    actions);
+  const check = h('button', {
+    type: 'button', class: 'card-check', role: 'checkbox', 'aria-checked': 'false',
+    title: 'Select (Shift-click selects a range)', 'aria-label': `Select ${b.name}`,
+    onclick: (e) => toggleSelect(b.id, e.shiftKey),
+  }, icon('check'));
+
+  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : ''), draggable: 'true' },
+    h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url, draggable: 'false' }, thumb, body),
+    tags, check, actions);
+  el.dataset.id = b.id;
+  // While something is selected, clicking a card selects instead of opening it.
+  el.querySelector('.card-link').addEventListener('click', (e) => {
+    if (S.sel.size) { e.preventDefault(); toggleSelect(b.id, e.shiftKey); }
+  });
+  bookmarkDrag(el, b);
+  return el;
 }
 
 let viewSet = new Set();
@@ -640,7 +665,18 @@ function inView(b) {
   if (b.deleted) return false;
   if (S.view === null) return true;
   if (S.view === 0) return !b.folderId || !S.fmap.has(b.folderId);
+  if (S.view === 'broken') return b.link === 2;
+  if (typeof S.view === 'string' && S.view.startsWith('tag:')) return (b.tags || []).includes(S.view.slice(4));
   return viewSet.has(b.folderId);
+}
+
+function viewTitle() {
+  if (S.view === null) return 'All crumbs';
+  if (S.view === 0) return 'Uncategorized';
+  if (S.view === 'trash') return 'Trash';
+  if (S.view === 'broken') return 'Broken links';
+  if (typeof S.view === 'string' && S.view.startsWith('tag:')) return '#' + S.view.slice(4);
+  return folderPath(S.view);
 }
 
 // Put the cards in sort order (only needed when data or sort changes).
@@ -649,22 +685,29 @@ function orderGrid() {
   filterGrid();
 }
 
+function matchesSearch(b, terms) {
+  const hay = `${b.name} ${b.url} ${b.description} ${folderPath(b.folderId)}`.toLowerCase();
+  const tags = b.tags || [];
+  return terms.every((t) => (t.startsWith('#') && t.length > 1
+    ? tags.some((x) => x.startsWith(t.slice(1)))
+    : hay.includes(t) || tags.some((x) => x.includes(t))));
+}
+
 function filterGrid() {
   viewSet = S.view > 0 ? subtree(S.view) : new Set();
   const terms = S.q.toLowerCase().split(/\s+/).filter(Boolean);
   let shown = 0;
   for (const b of [...S.list, ...S.trash]) {
-    let ok = inView(b);
-    if (ok && terms.length) {
-      const hay = `${b.name} ${b.url} ${b.description} ${folderPath(b.folderId)}`.toLowerCase();
-      ok = terms.every((t) => hay.includes(t));
-    }
+    const ok = inView(b) && (!terms.length || matchesSearch(b, terms));
     cards.get(b.id).hidden = !ok;
     if (ok) shown++;
   }
+  // A selection only makes sense for what's on screen.
+  for (const id of [...S.sel]) if (cards.get(id)?.hidden !== false) S.sel.delete(id);
+  updateSelection();
 
   const trash = S.view === 'trash';
-  $('#view-title').textContent = S.view === null ? 'All crumbs' : S.view === 0 ? 'Uncategorized' : trash ? 'Trash' : folderPath(S.view);
+  $('#view-title').textContent = viewTitle();
   $('#view-clear').hidden = S.view === null;
   $('#view-empty').hidden = !trash || !S.trash.length;
   $('#view-count').textContent = (S.q.trim()
@@ -673,8 +716,9 @@ function filterGrid() {
   const empty = $('#empty');
   empty.hidden = shown > 0;
   empty.textContent = trash ? (S.q.trim() ? 'Nothing in the trash matches that.' : 'The trash is empty.')
+    : S.view === 'broken' ? 'No broken links. Nice.'
     : !S.list.length ? 'No crumbs yet. Hit “Add” and drop your first one.'
-    : S.q.trim() ? 'No crumbs match that.' : 'This folder is empty.';
+    : S.q.trim() ? 'No crumbs match that.' : 'Nothing here yet.';
 }
 
 function selectView(v) {
@@ -728,6 +772,126 @@ function handleAddParam() {
   history.replaceState(null, '', '/');
   openEditor(null, url);
 }
+
+// ---------- selecting several crumbs ----------
+
+let lastPicked = null;
+
+function visibleIds() {
+  return [...$('#grid').children].filter((el) => !el.hidden).map((el) => Number(el.dataset.id));
+}
+
+function toggleSelect(id, range = false) {
+  if (range && lastPicked != null) {
+    const ids = visibleIds();
+    const [a, b] = [ids.indexOf(lastPicked), ids.indexOf(id)].sort((x, y) => x - y);
+    if (a >= 0 && b >= 0) ids.slice(a, b + 1).forEach((x) => S.sel.add(x));
+  } else if (S.sel.has(id)) {
+    S.sel.delete(id);
+  } else {
+    S.sel.add(id);
+  }
+  lastPicked = id;
+  updateSelection();
+}
+
+function clearSelection() {
+  S.sel.clear();
+  lastPicked = null;
+  updateSelection();
+}
+
+function selectAllVisible() {
+  visibleIds().forEach((id) => S.sel.add(id));
+  updateSelection();
+}
+
+function updateSelection() {
+  const n = S.sel.size;
+  document.body.classList.toggle('selecting', n > 0);
+  for (const [id, el] of cards) {
+    const on = S.sel.has(id);
+    el.classList.toggle('selected', on);
+    el.querySelector('.card-check')?.setAttribute('aria-checked', String(on));
+  }
+  const bar = $('#selbar');
+  bar.hidden = !n;
+  if (!n) return;
+  $('#sel-count').textContent = `${n} selected`;
+  const btn = (label, fn, ic) => h('button', { type: 'button', class: 'btn small', onclick: fn }, ic ? icon(ic) : null, label);
+  const trash = S.view === 'trash';
+  $('#sel-actions').replaceChildren(...(trash
+    ? [btn('Restore', () => bulk('restore'), 'restore'), btn('Delete forever', bulkDeleteForever, 'trash')]
+    : [
+        btn('Move to…', bulkMove, 'folder'),
+        btn('Tag…', bulkTag, 'tag'),
+        S.view && String(S.view).startsWith('tag:') ? btn(`Remove #${S.view.slice(4)}`, () => bulk('removeTag', { tag: S.view.slice(4) })) : null,
+        btn('Refresh previews', bulkRefresh, 'restore'),
+        btn('Export', bulkExport, 'download'),
+        btn('Trash', () => bulk('trash'), 'trash'),
+      ]).filter(Boolean),
+    btn(n === visibleIds().length ? 'Select none' : 'Select all', () => (n === visibleIds().length ? clearSelection() : selectAllVisible())));
+}
+$('#sel-clear').addEventListener('click', clearSelection);
+
+const selectedCrumbs = () => [...S.list, ...S.trash].filter((b) => S.sel.has(b.id));
+
+async function bulk(action, extra = {}, ids = [...S.sel]) {
+  try {
+    const r = await api('POST', '/api/bookmarks/bulk', { ids, action, ...extra });
+    clearSelection();
+    await loadBookmarks();
+    const n = r.changed;
+    const what = { move: 'Moved', trash: 'Moved to the trash:', restore: 'Restored', delete: 'Deleted', addTag: 'Tagged', removeTag: 'Untagged' }[action];
+    toast(`${what} ${n} crumb${n === 1 ? '' : 's'}` + (r.skipped ? ` (${r.skipped} skipped: already in that folder)` : ''),
+      action === 'trash' ? { label: 'Undo', fn: () => bulk('restore', {}, ids) } : null);
+  } catch (err) { toast(err.message); }
+}
+
+async function bulkDeleteForever() {
+  const n = S.sel.size;
+  if (await ask({ title: `Delete ${n} crumb${n === 1 ? '' : 's'} forever?`, text: "This can't be undone.", ok: 'Delete forever' })) bulk('delete');
+}
+
+function bulkMove() {
+  const d = $('#move-dlg');
+  $('#move-title').textContent = `Move ${S.sel.size} crumb${S.sel.size === 1 ? '' : 's'} to…`;
+  $('#move-text').textContent = 'Pick a folder.';
+  folderOptions($('#move-folder'), { selected: S.view > 0 ? S.view : null, rootLabel: 'Uncategorized' });
+  d.returnValue = '';
+  d.showModal();
+  d.addEventListener('close', () => {
+    if (d.returnValue !== 'ok') return;
+    const v = $('#move-folder').value;
+    bulk('move', { folderId: v ? Number(v) : null });
+  }, { once: true });
+}
+
+async function bulkTag() {
+  const t = await ask({ title: `Tag ${S.sel.size} crumb${S.sel.size === 1 ? '' : 's'}`, text: 'Type a tag (new or existing).', ok: 'Add tag', input: { type: 'text', placeholder: 'e.g. recipes' } });
+  if (t && t.trim()) bulk('addTag', { tag: t.trim() });
+}
+
+async function bulkRefresh() {
+  const list = selectedCrumbs();
+  clearSelection();
+  await refreshPreviews(list, { keepManual: false, status: (s) => toast(s) });
+}
+
+function bulkExport() {
+  const list = selectedCrumbs();
+  const data = { user: S.me ? S.me.username : 'crumbs', folders: S.folders, bookmarks: list };
+  const out = EXPORTERS.html(data);
+  download(out.text, `crumbs-selection-${new Date().toISOString().slice(0, 10)}.html`, out.mime);
+  toast(`Exported ${list.length} crumb${list.length === 1 ? '' : 's'} as a browser bookmarks file`);
+}
+
+document.addEventListener('keydown', (e) => {
+  if ($('#app').hidden || document.querySelector('dialog[open]')) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === 'Escape' && S.sel.size) { clearSelection(); e.preventDefault(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAllVisible(); }
+});
 
 // ---------- sidebar ----------
 
@@ -788,6 +952,12 @@ function toggleNode(node, btn, onChange) {
   saveTree();
 }
 
+function allTags() {
+  const counts = new Map();
+  for (const b of S.list) for (const t of b.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => coll.compare(a[0], b[0]));
+}
+
 function renderTree() {
   const tabsIn = new Map();
   for (const b of sorted(S.list)) {
@@ -801,16 +971,60 @@ function renderTree() {
     h('button', { type: 'button', class: 'label', text: label, onclick: () => selectView(view) }),
     h('span', { class: 'count', text: String(count) }));
 
+  const trashRow = simpleRow('trash', 'trash', 'Trash', S.trash.length);
+  dropBookmarksOn(trashRow, (ids) => bulk('trash', {}, ids));
+  const broken = S.list.filter((b) => b.link === 2).length;
+
   const top = (S.kids.get(0) || []).map((f) => folderNode(f, 0, tabsIn));
   const parts = [
     simpleRow(null, 'all', 'All crumbs', S.list.length),
     uncategorizedNode(tabsIn.get(0) || []),
-    simpleRow('trash', 'trash', 'Trash', S.trash.length),
+    trashRow,
+    broken ? simpleRow('broken', 'alert', 'Broken links', broken) : null,
     h('div', { class: 'tree-sep' }),
     ...top,
   ];
   if (!top.length) parts.push(h('div', { class: 'tree-empty', text: 'No folders yet. Use “Add folder”.' }));
-  $('#tree').replaceChildren(...parts);
+
+  const tags = allTags();
+  if (tags.length) {
+    parts.push(h('div', { class: 'tree-sep' }), h('div', { class: 'tree-head', text: 'Tags' }));
+    for (const [t, n] of tags) {
+      const row = h('div', { class: 'ti tagrow' + (S.view === 'tag:' + t ? ' active' : '') },
+        h('span', { class: 'twisty none' }),
+        icon('tag', 'ico'),
+        h('button', { type: 'button', class: 'label', text: t, onclick: () => selectView('tag:' + t) }),
+        h('span', { class: 'count', text: String(n) }),
+        h('span', { class: 'acts' },
+          actBtn('edit', 'Rename tag', () => renameTag(t)),
+          actBtn('trash', 'Remove tag everywhere', () => removeTag(t))));
+      dropBookmarksOn(row, (ids) => bulk('addTag', { tag: t }, ids));
+      parts.push(row);
+    }
+  }
+  $('#tree').replaceChildren(...parts.filter(Boolean));
+  $('#tag-list').replaceChildren(...tags.map(([t]) => h('option', { value: t })));
+}
+
+async function renameTag(t) {
+  const to = await ask({ title: `Rename #${t}`, text: 'Every crumb with this tag gets the new name.', ok: 'Rename', input: { type: 'text', value: t } });
+  if (!to || !to.trim() || to.trim() === t) return;
+  try {
+    await api('POST', '/api/tags', { from: t, to: to.trim() });
+    if (S.view === 'tag:' + t) S.view = 'tag:' + to.trim().toLowerCase().replace(/^#/, '');
+    await loadBookmarks();
+    toast('Tag renamed');
+  } catch (err) { toast(err.message); }
+}
+
+async function removeTag(t) {
+  if (!(await ask({ title: `Remove #${t}?`, text: 'The tag is taken off every crumb. The crumbs themselves stay.', ok: 'Remove tag' }))) return;
+  try {
+    await api('POST', '/api/tags', { from: t, to: '' });
+    if (S.view === 'tag:' + t) S.view = null;
+    await loadBookmarks();
+    toast('Tag removed');
+  } catch (err) { toast(err.message); }
 }
 
 function folderNode(f, depth, tabsIn) {
@@ -851,30 +1065,79 @@ function uncategorizedNode(tabs) {
     icon('inbox', 'ico'),
     h('button', { type: 'button', class: 'label', text: 'Uncategorized', onclick: () => selectView(0) }),
     h('span', { class: 'count', text: String(tabs.length) }));
+  dropBookmarksOn(row, (ids) => bulk('move', { folderId: null }, ids));
   const inner = h('div', { class: 'inner' }, ...tabs.map((b) => tabRow(b, 1)));
   node.append(row, h('div', { class: 'kids' }, inner));
   return node;
 }
 
 function tabRow(b, depth) {
-  const row = h('div', { class: 'ti tab' },
+  const row = h('div', { class: 'ti tab', draggable: 'true' },
     h('span', { class: 'twisty none' }),
-    b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy' }) : h('span', { class: 'dot', text: firstLetter(b.name) }),
-    h('a', { class: 'label', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', text: b.name, title: b.url }),
+    b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy', draggable: 'false' }) : h('span', { class: 'dot', text: firstLetter(b.name) }),
+    h('a', { class: 'label', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', text: b.name, title: b.url, draggable: 'false' }),
     h('span', { class: 'acts' }, actBtn('edit', 'Edit bookmark', () => openEditor(b))));
   row.style.setProperty('--depth', depth);
+  bookmarkDrag(row, b);
   return row;
 }
 
-// ---- drag folders to reorder them ----
-// Drop on the top part of a folder = put it above, bottom part = below,
-// middle = put it inside.
+// ---- drag & drop ----
+// Folders: drop on the top part of a folder = put it above, bottom part =
+// below, middle = inside. Crumbs (cards or sidebar rows): drop on a folder,
+// Uncategorized, Trash or a tag. A selected crumb drags the whole selection.
 
 let dragFolder = null;
+let dragCrumbs = null;
 
 function clearDropMarks() {
   document.querySelectorAll('.drop-before, .drop-after, .drop-into')
     .forEach((el) => el.classList.remove('drop-before', 'drop-after', 'drop-into'));
+}
+
+function bookmarkDrag(el, b) {
+  el.addEventListener('dragstart', (e) => {
+    if (e.target !== el) return;
+    dragCrumbs = S.sel.has(b.id) ? [...S.sel] : [b.id];
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('text/uri-list', b.url);
+    e.dataTransfer.setData('text/plain', b.url);
+    if (dragCrumbs.length > 1) {
+      const ghost = h('div', { class: 'drag-ghost', text: `${dragCrumbs.length} crumbs` });
+      document.body.append(ghost);
+      e.dataTransfer.setDragImage(ghost, 20, 20);
+      setTimeout(() => ghost.remove(), 0);
+    }
+    requestAnimationFrame(() => el.classList.add('dragging'));
+    document.body.classList.add('dragging-crumbs');
+    if (!wide() && !document.body.classList.contains('side-open')) setSidebar(true, false);
+  });
+  el.addEventListener('dragend', () => {
+    dragCrumbs = null;
+    el.classList.remove('dragging');
+    document.body.classList.remove('dragging-crumbs');
+    clearDropMarks();
+  });
+}
+
+function dropBookmarksOn(row, onDrop) {
+  row.addEventListener('dragover', (e) => {
+    if (!dragCrumbs) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!row.classList.contains('drop-into')) { clearDropMarks(); row.classList.add('drop-into'); }
+  });
+  row.addEventListener('dragleave', (e) => {
+    if (!row.contains(e.relatedTarget)) row.classList.remove('drop-into');
+  });
+  row.addEventListener('drop', (e) => {
+    if (!dragCrumbs) return;
+    e.preventDefault();
+    const ids = dragCrumbs;
+    dragCrumbs = null;
+    clearDropMarks();
+    onDrop(ids);
+  });
 }
 
 function folderDrag(row, f) {
@@ -891,6 +1154,13 @@ function folderDrag(row, f) {
     clearDropMarks();
   });
   row.addEventListener('dragover', (e) => {
+    if (dragCrumbs) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!row.classList.contains('drop-into')) { clearDropMarks(); row.classList.add('drop-into'); }
+      row.dataset.zone = 'crumbs';
+      return;
+    }
     if (dragFolder == null || subtree(dragFolder).has(f.id)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -907,6 +1177,12 @@ function folderDrag(row, f) {
     e.preventDefault();
     const zone = row.dataset.zone;
     clearDropMarks();
+    if (dragCrumbs) {
+      const ids = dragCrumbs;
+      dragCrumbs = null;
+      bulk('move', { folderId: f.id }, ids);
+      return;
+    }
     if (dragFolder != null && dragFolder !== f.id) moveFolder(dragFolder, f, zone);
   });
 }
@@ -1047,6 +1323,7 @@ function newEditorState(b) {
     pending: null,
     urls: [],
     folderPrev: '',
+    tags: b ? [...(b.tags || [])] : [],
   };
 }
 
@@ -1061,6 +1338,9 @@ function openEditor(b = null, presetUrl = '') {
   const folderId = b ? b.folderId : (S.view > 0 ? S.view : null);
   folderOptions(F('folder'), { selected: folderId && S.fmap.has(folderId) ? folderId : null, rootLabel: 'Uncategorized', allowNew: true });
   ed.folderPrev = F('folder').value;
+  if (!b && typeof S.view === 'string' && S.view.startsWith('tag:')) ed.tags = [S.view.slice(4)];
+  $('#tag-entry').value = '';
+  renderTagChips();
   if (b) {
     F('url').value = b.url;
     F('name').value = b.name;
@@ -1241,11 +1521,12 @@ form.addEventListener('submit', async (e) => {
       name: F('name').value,
       description: F('description').value,
       folderId: folder && folder !== '__new' ? Number(folder) : null,
+      tags: takeTagEntry(),
     };
     const b = isNew
       ? await api('POST', '/api/bookmarks', body)
       : await api('PUT', `/api/bookmarks/${cur.id}`, body);
-    if (cur.thumb instanceof Blob) await api('PUT', `/api/bookmarks/${b.id}/thumb`, cur.thumb);
+    if (cur.thumb instanceof Blob) await api('PUT', `/api/bookmarks/${b.id}/thumb${cur.manualThumb ? '?manual=1' : ''}`, cur.thumb);
     else if (cur.thumb === null && !isNew) await api('DELETE', `/api/bookmarks/${b.id}/thumb`);
     if (cur.icon instanceof Blob) await api('PUT', `/api/bookmarks/${b.id}/icon`, cur.icon);
     if (b.folderId) { treeState.open.add(b.folderId); saveTree(); }
@@ -1258,6 +1539,50 @@ form.addEventListener('submit', async (e) => {
     busy(btn, false);
   }
 });
+
+// ---- tags field: type a tag, Enter or comma adds it, Backspace removes the last ----
+
+const tagEntry = $('#tag-entry');
+const normTag = (t) => t.trim().replace(/^#/, '').replace(/,/g, ' ').replace(/\s+/g, ' ').toLowerCase().slice(0, 40);
+
+function renderTagChips() {
+  const box = $('#tag-input');
+  box.querySelectorAll('.chip-tag').forEach((c) => c.remove());
+  for (const t of ed.tags) {
+    box.insertBefore(h('span', { class: 'chip-tag' }, '#' + t,
+      h('button', { type: 'button', title: `Remove #${t}`, 'aria-label': `Remove tag ${t}`, onclick: () => { ed.tags = ed.tags.filter((x) => x !== t); renderTagChips(); } }, '×')),
+    tagEntry);
+  }
+}
+
+function addTagFromEntry() {
+  const t = normTag(tagEntry.value);
+  tagEntry.value = '';
+  if (t && !ed.tags.includes(t) && ed.tags.length < 20) { ed.tags.push(t); renderTagChips(); }
+}
+
+// Whatever is still typed in the field counts too when saving.
+function takeTagEntry() {
+  if (tagEntry.value.trim()) addTagFromEntry();
+  return ed.tags;
+}
+
+tagEntry.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ',') {
+    if (tagEntry.value.trim()) { e.preventDefault(); addTagFromEntry(); }
+    else if (e.key === ',') e.preventDefault();
+  } else if (e.key === 'Backspace' && !tagEntry.value && ed.tags.length) {
+    ed.tags.pop();
+    renderTagChips();
+  }
+});
+tagEntry.addEventListener('blur', () => { if (tagEntry.value.trim()) addTagFromEntry(); });
+// Picking a suggestion from the list adds it right away.
+tagEntry.addEventListener('input', (e) => {
+  const picked = !e.inputType || e.inputType === 'insertReplacementText';
+  if (picked && [...$('#tag-list').options].some((o) => o.value === tagEntry.value)) addTagFromEntry();
+});
+$('#tag-input').addEventListener('click', (e) => { if (e.target === e.currentTarget) tagEntry.focus(); });
 
 // Delete = move to the trash (with Undo); nothing is lost right away.
 $('#edit-delete').addEventListener('click', async () => {
@@ -1625,36 +1950,102 @@ $('#io-file').addEventListener('change', async (e) => {
   }
 });
 
-// Fetch thumbnails and favicons for crumbs that have none (e.g. after an import).
+// Fetch thumbnails and favicons in the browser and upload them to the Pi.
+// Used for "Fetch missing previews" (import), "Refresh all previews"
+// (Settings) and "Refresh previews" on a selection. 3 at a time keeps the Pi relaxed.
+//   keepManual: skip crumbs whose thumbnail the user picked by hand
+//   onlyMissing: only crumbs without a thumbnail
 let previewJob = false;
-$('#io-fetch').addEventListener('click', async () => {
-  const todo = S.list.filter((b) => !b.thumb);
-  if (!todo.length || previewJob) return;
+
+async function refreshPreviews(list, { keepManual = true, onlyMissing = false, status = () => {} } = {}) {
+  if (previewJob) { status('Already fetching previews, one moment…'); return null; }
+  const todo = list.filter((b) => !b.deleted && (!onlyMissing || !b.thumb));
+  if (!todo.length) { status('Nothing to refresh.'); return { done: 0, found: 0 }; }
   previewJob = true;
-  $('#io-fetch').disabled = true;
-  const status = $('#io-fetch-status');
   let done = 0, found = 0;
   const step = async (b) => {
     try {
       const meta = await api('GET', '/api/meta?url=' + encodeURIComponent(b.url));
+      const skipThumb = keepManual && b.thumbManual;
       const [thumb, ico] = await Promise.all([
-        firstOk(meta.images, (x) => makeThumb(x)),
-        b.icon ? null : firstOk(meta.icons, makeIcon),
+        skipThumb ? null : firstOk(meta.images, (x) => makeThumb(x)),
+        firstOk(meta.icons, makeIcon),
       ]);
       if (thumb) { await api('PUT', `/api/bookmarks/${b.id}/thumb`, thumb); found++; }
       if (ico) await api('PUT', `/api/bookmarks/${b.id}/icon`, ico);
     } catch { /* skip this one */ }
     done++;
-    status.textContent = `Fetching previews… ${done} of ${todo.length}`;
+    status(`Fetching previews… ${done} of ${todo.length}`);
   };
   const queue = [...todo];
   const worker = async () => { while (queue.length) await step(queue.shift()); };
-  await Promise.all([worker(), worker(), worker()]); // 3 at a time keeps the Pi relaxed
-  previewJob = false;
+  try {
+    await Promise.all([worker(), worker(), worker()]);
+  } finally {
+    previewJob = false;
+  }
   await loadBookmarks();
-  status.textContent = `Done: found ${found} thumbnail${found === 1 ? '' : 's'} for ${todo.length} crumb${todo.length === 1 ? '' : 's'}.`;
+  const msg = `Done: new thumbnails for ${found} of ${todo.length} crumb${todo.length === 1 ? '' : 's'}.`;
+  status(msg);
+  return { done, found, msg };
+}
+
+$('#io-fetch').addEventListener('click', async () => {
+  $('#io-fetch').disabled = true;
+  const r = await refreshPreviews(S.list, { onlyMissing: true, status: (s) => { $('#io-fetch-status').textContent = s; } });
   $('#io-fetch').disabled = !S.list.some((b) => !b.thumb);
-  if (!$('#io-dlg').open) toast(`Previews fetched for ${found} crumbs`);
+  if (r && !$('#io-dlg').open) toast(r.msg);
+});
+
+$('#refresh-all').addEventListener('click', async () => {
+  const keep = S.list.filter((b) => b.thumbManual).length;
+  const ok = await ask({
+    title: 'Refresh all previews?',
+    text: `Your browser fetches fresh thumbnails and icons for ${S.list.length} crumbs. `
+      + (keep ? `${keep} thumbnail${keep === 1 ? '' : 's'} you set yourself stay as they are. ` : '')
+      + 'This can take a while; you can keep using Crumbs meanwhile.',
+    ok: 'Refresh',
+  });
+  if (!ok) return;
+  $('#refresh-all').disabled = true;
+  const r = await refreshPreviews(S.list, { keepManual: true, status: (s) => { $('#refresh-status').textContent = s; } });
+  $('#refresh-all').disabled = false;
+  if (r && !$('#settings').open) toast(r.msg);
+});
+
+// ---- broken link check (runs on the Pi, only when asked) ----
+
+let linkPoll = null;
+
+function showLinkStatus(j) {
+  const el = $('#check-status');
+  if (j.running) {
+    el.textContent = `Checking links… ${j.done} of ${j.total}` + (j.broken ? ` · ${j.broken} broken so far` : '');
+  } else if (j.finished) {
+    el.replaceChildren(`Checked ${j.total} link${j.total === 1 ? '' : 's'}: ${j.broken ? `${j.broken} broken.` : 'all working.'} `);
+    if (j.broken) el.append(h('button', { type: 'button', class: 'linkish', text: 'Show them', onclick: () => { $('#settings').close(); selectView('broken'); } }));
+  }
+  $('#check-links').disabled = !!j.running;
+}
+
+async function watchLinkCheck() {
+  clearTimeout(linkPoll);
+  let j;
+  try { j = await api('GET', '/api/linkcheck'); } catch { return; }
+  showLinkStatus(j);
+  if (j.running) { linkPoll = setTimeout(watchLinkCheck, 1500); return; }
+  await loadBookmarks();
+  if (j.finished && !$('#settings').open) {
+    toast(j.broken ? `Link check done: ${j.broken} broken` : 'Link check done: all links work',
+      j.broken ? { label: 'Show', fn: () => selectView('broken') } : null);
+  }
+}
+
+$('#check-links').addEventListener('click', async () => {
+  try {
+    showLinkStatus(await api('POST', '/api/linkcheck'));
+    linkPoll = setTimeout(watchLinkCheck, 800);
+  } catch (err) { toast(err.message); }
 });
 
 // ---- exporters ----
@@ -1704,7 +2095,7 @@ const EXPORTERS = {
         lines.push(`${pad}</DL><p>`);
       }
       for (const b of t.marks(id)) {
-        lines.push(`${pad}<DT><A HREF="${esc(b.url)}" ADD_DATE="${b.created || ''}" LAST_MODIFIED="${b.updated || ''}">${esc(b.name)}</A>`);
+        lines.push(`${pad}<DT><A HREF="${esc(b.url)}" ADD_DATE="${b.created || ''}" LAST_MODIFIED="${b.updated || ''}"${(b.tags || []).length ? ` TAGS="${esc(b.tags.join(','))}"` : ''}>${esc(b.name)}</A>`);
         if (b.description) lines.push(`${pad}<DD>${esc(b.description)}`);
       }
     };
@@ -1717,8 +2108,8 @@ const EXPORTERS = {
   },
   csv(data) {
     const t = exportTree(data);
-    const rows = [['name', 'url', 'description', 'folder', 'created', 'updated']];
-    for (const b of data.bookmarks) rows.push([b.name, b.url, b.description, t.path(b.folderId).join(' / '), iso(b.created), iso(b.updated)]);
+    const rows = [['name', 'url', 'description', 'folder', 'tags', 'created', 'updated']];
+    for (const b of data.bookmarks) rows.push([b.name, b.url, b.description, t.path(b.folderId).join(' / '), (b.tags || []).join(', '), iso(b.created), iso(b.updated)]);
     return { text: rows.map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n', ext: 'csv', mime: 'text/csv' };
   },
   md(data) {
@@ -1770,6 +2161,13 @@ function parseImport(text, filename = '') {
   return importText(text);
 }
 
+// Tags come as an array, "a,b", "a, b", "a|b" (Pocket) or "a;b".
+function splitTagList(v) {
+  if (!v) return [];
+  const list = Array.isArray(v) ? v : String(v).split(/[,|;]/);
+  return list.map((t) => String(t).trim().replace(/^#/, '')).filter(Boolean);
+}
+
 function importHTML(text) {
   const doc = new DOMParser().parseFromString(text, 'text/html');
   const items = [];
@@ -1788,6 +2186,7 @@ function importHTML(text) {
         items.push({
           name: a.textContent.trim(), url: a.getAttribute('href'),
           description: dd ? dd.textContent.trim() : '', path, created: toSeconds(a.getAttribute('add_date')),
+          tags: splitTagList(a.getAttribute('tags')),
         });
       }
     }
@@ -1806,7 +2205,7 @@ function importJSON(data) {
   if (data && Array.isArray(data.bookmarks)) {
     const t = exportTree({ folders: data.folders || [], bookmarks: [] });
     for (const b of data.bookmarks) {
-      items.push({ name: b.name || b.title || '', url: b.url || '', description: b.description || '', path: t.path(b.folderId), created: toSeconds(b.created) });
+      items.push({ name: b.name || b.title || '', url: b.url || '', description: b.description || '', path: t.path(b.folderId), created: toSeconds(b.created), tags: splitTagList(b.tags) });
     }
     return items;
   }
@@ -1820,6 +2219,7 @@ function importJSON(data) {
       items.push({
         name: node.name || node.title || '', url,
         description: node.description || node.note || node.excerpt || '',
+        tags: splitTagList(node.tags),
         path: folder ? (Array.isArray(folder) ? folder : splitPath(folder)) : path,
         created: toSeconds(node.created || node.date_added || node.dateAdded || node.created_at || node.time_added),
       });
@@ -1865,10 +2265,12 @@ function importCSV(text) {
   if (iu >= 0) {
     const iname = col('name', 'title'), idesc = col('description', 'note', 'notes', 'excerpt', 'comment');
     const ifold = col('folder', 'path', 'collection', 'category'), icreated = col('created', 'created_at', 'time_added', 'date_added', 'added', 'date');
+    const itags = col('tags', 'tag', 'labels', 'keywords');
     for (const r of rows.slice(1)) {
       items.push({
         name: iname >= 0 ? r[iname] || '' : '', url: (r[iu] || '').trim(),
         description: idesc >= 0 ? r[idesc] || '' : '', path: ifold >= 0 ? splitPath(r[ifold]) : [],
+        tags: itags >= 0 ? splitTagList(r[itags]) : [],
         created: icreated >= 0 ? toSeconds(r[icreated]) : 0,
       });
     }
@@ -1925,6 +2327,9 @@ function importText(text) {
 
 function openSettings() {
   renderSettings();
+  const own = S.list.filter((b) => b.thumbManual).length;
+  if (!previewJob) $('#refresh-status').textContent = own ? `${own} thumbnail${own === 1 ? '' : 's'} you set yourself will be kept.` : '';
+  api('GET', '/api/linkcheck').then(showLinkStatus).catch(() => {});
   $('#settings').showModal();
 }
 
@@ -2054,10 +2459,39 @@ $('#dup-clean').addEventListener('click', async () => {
 let ownerName = '';
 let adminUsers = [];
 
+// ---- backups (nightly at 3:00, newest 7 kept, in data/backups) ----
+
+function renderBackups(data) {
+  $('#backup-note').textContent = `Every night at ${data.hour}:00 Crumbs saves the database, thumbnails and photos to data/backups on the Pi and keeps the newest ${data.keep}.`;
+  $('#backup-list').replaceChildren(...(data.backups.length
+    ? data.backups.map((b) => h('li', { class: 'user-row' },
+        icon('box', 'backup-ico', FOLDER_ICONS),
+        h('div', { class: 'who' },
+          h('strong', { text: new Date(b.created * 1000).toLocaleString() }),
+          h('div', { class: 'handle', text: `${b.name} · ${formatBytes(b.size)}` })),
+        h('a', { class: 'btn small', href: `/api/backups/${encodeURIComponent(b.name)}`, download: b.name }, icon('download'), 'Download')))
+    : [h('li', { class: 'user-row muted small', text: 'No backups yet. The first one is made tonight, or press Back up now.' })]));
+}
+
+async function loadBackups() {
+  try { renderBackups(await api('GET', '/api/backups')); } catch (e) { $('#backup-note').textContent = e.message; }
+}
+
+$('#backup-now').addEventListener('click', async () => {
+  const btn = $('#backup-now');
+  busy(btn, true, 'Backing up…');
+  try {
+    renderBackups(await api('POST', '/api/backups'));
+    toast('Backup saved');
+  } catch (err) { toast(err.message); }
+  finally { busy(btn, false); }
+});
+
 async function openAdmin() {
   showError('#user-error', '');
   $('#user-form').reset();
   try { await loadUsers(); } catch (e) { toast(e.message); return; }
+  loadBackups();
   $('#admin').showModal();
 }
 

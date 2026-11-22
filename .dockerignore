@@ -3,3 +3,4 @@ data
 *.md
 docker-compose.yml
 Dockerfile
+.github

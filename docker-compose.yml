@@ -1,14 +1,19 @@
 services:
   crumbs:
-    build: .
-    image: crumbs:latest
+    # Ready-made image, built by GitHub Actions for the Pi (arm64) and x86.
+    # Update with:  docker compose pull && docker compose up -d
+    image: ghcr.io/reapertakumi/crumbs:latest
+    # To compile on the Pi instead, comment out the line above and uncomment:
+    # build: .
     container_name: crumbs
     restart: unless-stopped
     ports:
       - "9099:9099"
     volumes:
-      # Database and thumbnails live here. Back up this folder.
+      # Database, thumbnails, photos and backups (data/backups) live here.
       - ./data:/data
+      # Use the Pi's time zone, so the nightly backup runs at 3:00 your time.
+      - /etc/localtime:/etc/localtime:ro
     deploy:
       resources:
         limits:

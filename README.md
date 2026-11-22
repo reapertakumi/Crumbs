@@ -59,6 +59,19 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   Hover a folder to collapse or expand it, add a subfolder or edit it. Give each folder its own color and icon, and
   drag folders to reorder them: drop on the top or bottom edge of another folder to go above or below it, or in the
   middle to go inside it. Bookmarks without a folder live in **Uncategorized**.
+- **Tags.** Give a crumb any number of tags in the editor (type, then Enter). Tags show on the cards and get their own
+  list in the sidebar, where you can rename or remove them. Search `#recipes` to find a tag.
+- **Select several crumbs.** Tick the box in a card's corner (Shift-click for a range, Ctrl+A for everything shown),
+  then move, tag, refresh, export or trash them all at once from the bar at the bottom.
+- **Drag & drop.** Drag cards (or sidebar rows) onto a folder, **Uncategorized**, a tag or the **Trash**. Dragging a
+  selected crumb takes the whole selection along.
+- **Broken link checker.** **Settings → Maintenance → Check now**: the Pi visits every link once and marks the ones
+  that are gone (404, site not found, server errors) with a **Broken** badge and a **Broken links** view. It only runs
+  when you press the button.
+- **Refresh all previews.** **Settings → Maintenance → Refresh**: fresh thumbnails and icons for everything. Thumbnails
+  you uploaded or pasted yourself are kept.
+- **Automatic backups.** Every night at 3:00 the database, thumbnails and photos are zipped into `data/backups`, and the
+  newest 7 are kept. Admins can **Back up now** and download any backup from **Admin → Backups**.
 - **Trash.** Deleting a crumb moves it to the **Trash** (with Undo). Restore it or delete it forever from there.
   The trash empties itself after 30 days.
 - **No duplicates (optional).** Turn on **Settings → Duplicates → Remove duplicates** and pick **Everywhere** (a link
@@ -98,10 +111,19 @@ Then get Crumbs and start it:
 ```bash
 git clone https://github.com/reapertakumi/Crumbs.git
 cd Crumbs
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-The first build compiles SQLite and takes a few minutes on the Pi. Later builds are much faster.
+There's nothing to compile: GitHub builds a ready-made image for the Pi (and for x86) on every push and publishes it as
+`ghcr.io/reapertakumi/crumbs:latest`. `docker compose pull` just downloads it.
+
+> **One-time step on GitHub:** the first time the image is published it is private. Open your GitHub profile →
+> **Packages → crumbs → Package settings → Change visibility → Public**, so the Pi can download it without logging in.
+> (Or keep it private and run `docker login ghcr.io` on the Pi with a token that has `read:packages`.)
+
+Prefer to compile on the Pi? In `docker-compose.yml`, comment out the `image:` line, uncomment `build: .` and run
+`docker compose up -d --build` (the first build takes a few minutes).
 
 Now open **`http://<your-pi-ip>:9099`** in any browser on your network, for example
 `http://raspberrypi.local:9099`. To find the Pi's IP, run `hostname -I` on the Pi.
@@ -184,14 +206,21 @@ Everything lives in the `./data` folder next to `docker-compose.yml`:
 data/
 ├── crumbs.db      # SQLite database: users, sessions, folders, bookmarks, settings
 ├── avatars/       # uploaded profile pictures
-└── img/           # thumbnails and favicons
+├── img/           # thumbnails and favicons
+└── backups/       # nightly backups (newest 7)
 ```
 
-**Backup:**
+**Backups** happen by themselves every night at 3:00 (the Pi's time zone). Each one is a `.zip` with the database,
+thumbnails, favicons and profile photos. Download them from **Admin → Backups**, or copy `data/backups` off the Pi
+from time to time, since a backup on the same SD card won't survive the card dying.
+
+**Restore a backup:**
 
 ```bash
 docker compose stop
-tar czf crumbs-backup-$(date +%F).tgz data
+mkdir restore && cd restore && unzip ../data/backups/crumbs-YYYY-MM-DD-HHMMSS.zip && cd ..
+cp restore/crumbs.db data/crumbs.db && rm -f data/crumbs.db-wal data/crumbs.db-shm
+cp -r restore/img restore/avatars data/
 docker compose start
 ```
 
@@ -199,10 +228,11 @@ docker compose start
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-**Forgot the admin password?** Ask another admin to reset it in **Settings → Users**. If you are the only
+**Forgot the admin password?** Ask another admin to reset it in **Admin → Users**. If you are the only
 admin, stop Crumbs, move `data/crumbs.db` somewhere safe, and start again to get a fresh setup screen.
 
 ## Project layout
@@ -216,6 +246,11 @@ transfer.go      import / export
 bookmarks.go     bookmark CRUD and image storage
 folders.go       nested folders
 profile.go       profile pictures
+dedupe.go        duplicate rules
+bulk.go          actions on many crumbs, tags
+linkcheck.go     broken link checker
+backup.go        nightly backups
+.github/         GitHub Actions: builds the Pi image
 meta.go          title, favicon and preview lookup, YouTube, image relay
 db.go            SQLite schema
 web/             the front end (plain HTML, CSS and JS, embedded into the binary)
@@ -238,6 +273,9 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `POST` | `/api/register` | Create an account (only while registration is open) |
 | `PUT` | `/api/me` | Change your display name and/or duplicate rule `{"displayName", "dedupe": ""\|"all"\|"folder"}` |
 | `POST` | `/api/dedupe` | `{"mode": "all"\|"folder"}` moves extra copies to the trash (`?dry=1` only counts them) |
+| `POST` | `/api/bookmarks/bulk` | `{"ids":[...], "action":"move\|trash\|restore\|delete\|addTag\|removeTag", "folderId", "tag"}` |
+| `POST` | `/api/tags` | Rename a tag everywhere `{"from","to"}`, or remove it with an empty `"to"` |
+| `GET` `POST` | `/api/linkcheck` | Progress of / start the broken link check |
 | `GET` | `/api/export` | Your folders and bookmarks as JSON |
 | `POST` | `/api/import` | Add many bookmarks `{"items":[{"name","url","description","path":["Folder","Sub"]}],"skipDuplicates":true}` |
 | `POST` | `/api/folders` | Create a folder `{"name", "parentId"}` |
@@ -253,6 +291,8 @@ All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
 | `GET` `POST` | `/api/users/{id}/export` · `/import` | Admin: export / import someone's bookmarks |
 | `PUT` | `/api/users/{id}/password` | Admin: reset a password |
 | `PUT` | `/api/settings` | Admin: `{"loginRequired": true\|false, "registration": true\|false}` |
+| `GET` `POST` | `/api/backups` | Admin: list backups / make one now |
+| `GET` | `/api/backups/{name}` | Admin: download a backup |
 
 ---
 
