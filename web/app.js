@@ -2726,20 +2726,38 @@ $('#reset-settings').addEventListener('click', async () => {
 });
 
 $('#remove-all').addEventListener('click', async () => {
-  const n = S.list.length;
-  if (!n) { toast('There are no crumbs to remove'); return; }
+  const n = S.list.length + S.trash.length, f = S.folders.length, t = allTags().length;
+  if (!n && !f) { toast('There is nothing to delete'); return; }
   const ok = await ask({
-    title: `Remove all ${n} crumb${n === 1 ? '' : 's'}?`,
-    text: 'Every crumb moves to the Trash, where you can restore it for 30 days. Folders and tags stay. To be sure, type REMOVE below.',
-    ok: 'Remove all',
-    input: { type: 'text', placeholder: 'REMOVE' },
+    title: 'Delete everything?',
+    text: `${n} crumb${n === 1 ? '' : 's'} (Trash included), ${f} folder${f === 1 ? '' : 's'} and ${t} tag${t === 1 ? '' : 's'} will be deleted for good. This can't be undone. To be sure, type DELETE below.`,
+    ok: 'Delete everything',
+    input: { type: 'text', placeholder: 'DELETE' },
   });
   if (ok == null) return;
-  if (ok.trim().toUpperCase() !== 'REMOVE') { toast('Nothing removed: type REMOVE to confirm'); return; }
-  const ids = S.list.map((b) => b.id);
-  $('#settings').close();
-  await bulk('trash', {}, ids);
+  if (ok.trim().toUpperCase() !== 'DELETE') { toast('Nothing deleted: type DELETE to confirm'); return; }
+  try {
+    const r = await api('POST', '/api/wipe');
+    $('#settings').close();
+    clearSelection();
+    S.view = null;
+    await loadBookmarks();
+    toast(`Deleted ${r.bookmarks} crumb${r.bookmarks === 1 ? '' : 's'} and ${r.folders} folder${r.folders === 1 ? '' : 's'}`);
+  } catch (err) { toast(err.message); }
 });
+
+// Clicking outside Profile, Admin or Settings (on the dimmed backdrop) closes
+// it. Both the press and the release must be on the backdrop, so dragging a
+// text selection out of the window doesn't close it by accident.
+for (const id of ['#profile', '#admin', '#settings']) {
+  const d = $(id);
+  let downOnBackdrop = false;
+  d.addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === d; });
+  d.addEventListener('click', (e) => {
+    if (downOnBackdrop && e.target === d) d.close();
+    downOnBackdrop = false;
+  });
+}
 
 // ---- duplicates (saved to the account, not the browser) ----
 // "" = off, "all" = a link only once anywhere, "folder" = only once per folder.

@@ -198,3 +198,48 @@ func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 	writeJSON(w, http.StatusOK, map[string]int{"changed": len(list)})
 }
 
+
+// handleWipe deletes every bookmark (trash included), every folder and with
+// them every tag of the signed-in user, for good. The account stays.
+func (a *App) handleWipe(w http.ResponseWriter, r *http.Request, who *Who) {
+	if who.Guest {
+		jsonErr(w, http.StatusForbidden, "sign in to delete everything")
+		return
+	}
+	var ids []int64
+	rows, err := a.db.Query(`SELECT id FROM bookmarks WHERE user_id = ?`, who.ID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	tx, err := a.db.Begin()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer tx.Rollback()
+	var folders int64
+	if _, err := tx.Exec(`DELETE FROM bookmarks WHERE user_id = ?`, who.ID); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	res, err := tx.Exec(`DELETE FROM folders WHERE user_id = ?`, who.ID)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	folders, _ = res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.removeImages(ids...)
+	writeJSON(w, http.StatusOK, map[string]int64{"bookmarks": int64(len(ids)), "folders": folders})
+}
