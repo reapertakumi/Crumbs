@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -230,10 +231,26 @@ func (a *App) handleUpdateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusNotFound, "no such bookmark")
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	body, err := io.ReadAll(r.Body)
 	var in bookmarkIn
-	if err := readJSON(w, r, &in); err != nil {
+	var sent map[string]json.RawMessage
+	if err != nil || json.Unmarshal(body, &in) != nil || json.Unmarshal(body, &sent) != nil {
 		jsonErr(w, http.StatusBadRequest, "bad request")
 		return
+	}
+	// Fields a client leaves out keep their saved value (e.g. an older
+	// browser extension that doesn't know about tags must not wipe them).
+	if old, err := a.getBookmark(who.ID, id); err == nil {
+		if _, ok := sent["tags"]; !ok {
+			in.Tags = old.Tags
+		}
+		if _, ok := sent["folderId"]; !ok {
+			in.FolderID = old.FolderID
+		}
+		if _, ok := sent["description"]; !ok {
+			in.Description = old.Description
+		}
 	}
 	if err := a.cleanBookmark(who.ID, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, err.Error())

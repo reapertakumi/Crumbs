@@ -59,6 +59,8 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   Hover a folder to collapse or expand it, add a subfolder or edit it. Give each folder its own color and icon, and
   drag folders to reorder them: drop on the top or bottom edge of another folder to go above or below it, or in the
   middle to go inside it. Bookmarks without a folder live in **Uncategorized**.
+- **Browser extension.** Save the page you're on with one click from Chrome: thumbnail, favicon, name, URL, folder and
+  description. See [Browser extension](#browser-extension).
 - **Tags.** Give a crumb any number of tags in the editor (type, then Enter). Tags show on the cards and get their own
   list in the sidebar, where you can rename or remove them. Search `#recipes` to find a tag.
 - **Select several crumbs.** Tick the box in a card's corner (Shift-click for a range, Ctrl+A for everything shown),
@@ -156,6 +158,15 @@ To edit or delete a crumb, hover over its card (or its row in the sidebar) and c
 | Name + picture (right) | **Admin** (admins only), **Profile** (name, picture, password), **Import / export**, **Settings** (theme, size, layout, background), **Sign out**. |
 
 Deleting a folder never deletes bookmarks: its bookmarks and subfolders move up one level.
+
+### Browser extension
+
+The [Crumbs extension for Chrome](https://github.com/reapertakumi/Crumbs-Extension) saves the page you're on to
+Crumbs with one click: thumbnail, favicon, name, URL, folder and description. Download it from the
+[latest release](https://github.com/reapertakumi/Crumbs-Extension/releases/latest) and follow the install steps there.
+
+The extension signs in with your Crumbs username and password and gets an **API token** (`POST /api/token`) instead of
+a cookie. A token lasts a year and ends when you press **Disconnect** in the extension or change your password.
 
 ### Bookmarklet (save the page you're on with one click)
 
@@ -258,13 +269,16 @@ web/             the front end (plain HTML, CSS and JS, embedded into the binary
 
 ## API
 
-All endpoints are JSON and use the session cookie. `{id}` is a bookmark id.
+All endpoints are JSON and use the session cookie, or an `Authorization: Bearer <token>` header from `/api/token`.
+Requests from other sites are refused, except ones that carry an `X-Crumbs-Client` header (only an app or browser
+extension can send that; a web page can't). `{id}` is a bookmark id.
 
 | Method | Path | |
 | ------ | ---- | - |
 | `GET` | `/api/state` | Who am I, is setup needed, is login required |
 | `POST` | `/api/setup` | Create the first (admin) account |
-| `POST` | `/api/login` · `/api/logout` | Sign in / out |
+| `POST` | `/api/login` · `/api/logout` | Sign in / out (logout with a Bearer token deletes that token) |
+| `POST` | `/api/token` | `{"username","password"}` → `{"token","user"}`, an API token that lasts a year |
 | `GET` `POST` | `/api/bookmarks` | List / create |
 | `PUT` `DELETE` | `/api/bookmarks/{id}` | Update / move to trash (`?forever=1` deletes for good) |
 | `POST` | `/api/bookmarks/{id}/restore` | Take a crumb out of the trash |

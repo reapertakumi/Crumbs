@@ -39,7 +39,7 @@ func (a *App) secure(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Content-Security-Policy", appCSP)
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && !sameOrigin(r) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !sameOrigin(r) && !fromClient(r) {
 			jsonErr(w, http.StatusForbidden, "cross-site request blocked")
 			return
 		}
@@ -58,6 +58,21 @@ func sameOrigin(r *http.Request) bool {
 	return true
 }
 
+// fromClient reports a request from the Crumbs browser extension. A web page
+// can only send this custom header cross-site after a CORS preflight, and
+// Crumbs never answers one, so other websites cannot use it to forge writes.
+// Extensions with permission for the Crumbs address are not bound by CORS.
+func fromClient(r *http.Request) bool {
+	return r.Header.Get("X-Crumbs-Client") != ""
+}
+
+// bearerToken returns the API token of a request, if it carries one.
+func bearerToken(r *http.Request) (string, bool) {
+	t, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	t = strings.TrimSpace(t)
+	return t, ok && t != ""
+}
+
 // Who is the person behind a request. Guest means "login is disabled and
 // this visitor is browsing the owner's bookmarks without signing in".
 type Who struct {
@@ -66,6 +81,14 @@ type Who struct {
 }
 
 func (a *App) who(r *http.Request) *Who {
+	// An API token (from the browser extension) wins over any cookie, so a
+	// request is never a mix of two accounts. A bad token never falls back.
+	if t, ok := bearerToken(r); ok {
+		if u := a.sessionUser(t); u != nil {
+			return &Who{User: *u}
+		}
+		return nil
+	}
 	if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
 		if u := a.sessionUser(c.Value); u != nil {
 			return &Who{User: *u}

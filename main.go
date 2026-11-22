@@ -69,6 +69,7 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("GET /api/state", a.handleState)
 	mux.HandleFunc("POST /api/setup", a.handleSetup)
 	mux.HandleFunc("POST /api/login", a.handleLogin)
+	mux.HandleFunc("POST /api/token", a.handleToken)
 	mux.HandleFunc("POST /api/register", a.handleRegister)
 	mux.HandleFunc("POST /api/logout", a.handleLogout)
 	mux.HandleFunc("POST /api/password", a.user(a.handlePassword))

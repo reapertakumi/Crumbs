@@ -297,16 +297,18 @@ func (a *App) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, u)
 }
 
-func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
+// checkLogin reads {username, password}, applies the rate limit and returns
+// the user id. On failure it has already written the error response.
+func (a *App) checkLogin(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	ip := clientIP(r)
 	if a.limiter.blocked(ip) {
 		jsonErr(w, http.StatusTooManyRequests, "too many attempts, try again in a few minutes")
-		return
+		return 0, false
 	}
 	var in credsIn
 	if err := readJSON(w, r, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, "bad request")
-		return
+		return 0, false
 	}
 	var id int64
 	var hash string
@@ -316,18 +318,26 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		checkPassword(in.Password, dummyHash) // same work as a real check
 		a.limiter.fail(ip)
 		jsonErr(w, http.StatusUnauthorized, "wrong username or password")
-		return
+		return 0, false
 	}
 	if !checkPassword(in.Password, hash) {
 		a.limiter.fail(ip)
 		jsonErr(w, http.StatusUnauthorized, "wrong username or password")
-		return
+		return 0, false
 	}
 	if blocked == 1 {
 		jsonErr(w, http.StatusForbidden, "this account has been blocked by an admin")
-		return
+		return 0, false
 	}
 	a.limiter.reset(ip)
+	return id, true
+}
+
+func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.checkLogin(w, r)
+	if !ok {
+		return
+	}
 	if err := a.startSession(w, r, id); err != nil {
 		jsonErr(w, http.StatusInternalServerError, "could not start session")
 		return
@@ -335,7 +345,32 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// tokenTTL is how long an API token (browser extension sign-in) lasts.
+const tokenTTL = 365 * 24 * time.Hour
+
+// handleToken signs in like handleLogin but returns an API token in the body
+// instead of setting a cookie. The browser extension uses it.
+func (a *App) handleToken(w http.ResponseWriter, r *http.Request) {
+	id, ok := a.checkLogin(w, r)
+	if !ok {
+		return
+	}
+	token := newToken()
+	if _, err := a.db.Exec(`INSERT INTO sessions(token_hash, user_id, expires_at) VALUES (?, ?, ?)`,
+		tokenHash(token), id, time.Now().Add(tokenTTL).Unix()); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "could not start session")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"token": token, "user": a.getUser(id)})
+}
+
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
+	// An API token (extension "Disconnect") is forgotten; no cookie involved.
+	if t, ok := bearerToken(r); ok {
+		a.db.Exec(`DELETE FROM sessions WHERE token_hash = ?`, tokenHash(t))
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
 	if c, err := r.Cookie(cookieName); err == nil {
 		a.db.Exec(`DELETE FROM sessions WHERE token_hash = ?`, tokenHash(c.Value))
 	}
@@ -372,9 +407,11 @@ func (a *App) handlePassword(w http.ResponseWriter, r *http.Request, who *Who) {
 		return
 	}
 	a.db.Exec(`UPDATE users SET pass_hash = ? WHERE id = ?`, nh, who.ID)
-	// Sign out every other device, keep this one.
+	// Sign out every other device (and API token), keep this one.
 	keep := ""
-	if c, err := r.Cookie(cookieName); err == nil {
+	if t, ok := bearerToken(r); ok {
+		keep = tokenHash(t)
+	} else if c, err := r.Cookie(cookieName); err == nil {
 		keep = tokenHash(c.Value)
 	}
 	a.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?`, who.ID, keep)
