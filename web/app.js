@@ -1192,13 +1192,17 @@ function bookmarkDrag(el, b) {
       e.dataTransfer.setDragImage(ghost, 20, 20);
       setTimeout(() => ghost.remove(), 0);
     }
-    requestAnimationFrame(() => el.classList.add('dragging'));
+    // Dim every crumb that is coming along (the whole selection), not only
+    // the one under the pointer.
+    const moving = [el, ...dragCrumbs.map((id) => cards.get(id)).filter(Boolean)];
+    // (after the browser has taken its drag picture, so that stays bright)
+    setTimeout(() => moving.forEach((x) => x.classList.add('dragging')), 0);
     document.body.classList.add('dragging-crumbs');
     if (!wide() && !document.body.classList.contains('side-open')) setSidebar(true, false);
   });
   el.addEventListener('dragend', () => {
     dragCrumbs = null;
-    el.classList.remove('dragging');
+    document.querySelectorAll('.dragging').forEach((x) => x.classList.remove('dragging'));
     document.body.classList.remove('dragging-crumbs');
     clearDropMarks();
   });
