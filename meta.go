@@ -190,7 +190,9 @@ func parseHTML(doc string, base *url.URL, m *Meta) {
 	if tm := reTitle.FindStringSubmatch(doc); tm != nil {
 		title = tm[1]
 	}
-	m.Title = clip(oneLine(html.UnescapeString(firstNonEmpty(ogTitle, title, twTitle))), 300)
+	// The page's own <title> (what the browser tab shows) wins; the share
+	// titles (og:/twitter:) are only a fallback for pages without one.
+	m.Title = clip(oneLine(html.UnescapeString(firstNonEmpty(title, ogTitle, twTitle))), 300)
 	m.Description = clip(oneLine(html.UnescapeString(firstNonEmpty(ogDesc, desc))), 600)
 
 	for _, img := range images {
@@ -304,7 +306,10 @@ func youtubeMeta(ctx context.Context, id string, m *Meta) {
 		m.Error = "could not read YouTube info"
 		return
 	}
-	m.Title = o.Title
+	// Same as the browser tab shows for a video page.
+	if o.Title != "" {
+		m.Title = o.Title + " - YouTube"
+	}
 	if o.Author != "" {
 		m.Description = "YouTube video by " + o.Author
 	}
