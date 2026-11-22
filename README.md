@@ -14,7 +14,8 @@
   <a href="#documentation">Documentation</a> ·
   <a href="#features">Features</a> ·
   <a href="#how-to-find-crumbs-on-the-internet">The crumb story</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/reapertakumi/Crumbs-Extension">Chrome extension</a>
 </p>
 
 ---
@@ -50,6 +51,8 @@ The full walk-through, with what each step does: **[docs/install.md](docs/instal
 | [Configuration](docs/configuration.md) | `.env` settings, ports, memory limit |
 | [Troubleshooting](docs/troubleshooting.md) | Key not picked up, can't connect, pull denied, missing thumbnails |
 | [API](docs/api.md) | Every endpoint, for scripts and the browser extension |
+
+**Browser extension:** save the page you're on with one click using [Crumbs-Extension](https://github.com/reapertakumi/Crumbs-Extension) for Chrome ([download the latest release](https://github.com/reapertakumi/Crumbs-Extension/releases/latest)).
 
 ---
 
