@@ -5,24 +5,24 @@
 <h1 align="center">Crumbs</h1>
 
 <p align="center">
-  A tiny, visual, black-and-white bookmark manager for your Raspberry Pi 5.<br>
-  Go + an encrypted SQLite database in one small Docker container, on <b>http :9099</b> and <b>https :9443</b>.
+  Your bookmarks as a wall of pictures, kept safe on your own Raspberry Pi 5.<br>
+  One small Docker container · encrypted database · <b>http :9099</b> and <b>https :9443</b>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#documentation">Documentation</a> ·
+  <a href="#browser-extension">Browser extension</a> ·
   <a href="#features">Features</a> ·
+  <a href="#documentation">Documentation</a> ·
   <a href="#how-to-find-crumbs-on-the-internet">The crumb story</a> ·
-  <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="https://github.com/reapertakumi/Crumbs-Extension">Chrome extension</a>
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
 
 ## Quick start
 
-On a Raspberry Pi 5 with Raspberry Pi OS (64-bit) and Docker:
+On a Raspberry Pi 5 with Raspberry Pi OS (64-bit) and Docker installed:
 
 ```bash
 git clone https://github.com/reapertakumi/Crumbs.git && cd Crumbs
@@ -34,86 +34,95 @@ docker compose pull
 docker compose up -d
 ```
 
-Open `https://<pi-address>:9443` (accept the certificate warning once) or `http://<pi-address>:9099`, choose a
-database key if you didn't set one, and create the first account – it becomes the admin.
+Then open `https://<pi-address>:9443` (accept the certificate warning once) or `http://<pi-address>:9099`.
+If you skipped the key, choose one on the Unlock page. The first account you create is the admin.
 
-The full walk-through, with what each step does: **[docs/install.md](docs/install.md)**.
+**Updating:** `docker compose pull && docker compose up -d`. The step-by-step guide is in
+**[docs/install.md](docs/install.md)**.
+
+---
+
+## Browser extension
+
+Save the page you're on with one click: thumbnail, favicon, name, link, folder and description.
+
+<p>
+  <a href="https://chromewebstore.google.com/detail/crumbs/jaibbgbglgbajgpdafmfnfjebjomhobo"><b>Add to Chrome</b></a> (Chrome Web Store) ·
+  <a href="https://github.com/reapertakumi/Crumbs-Extension">Source code</a> ·
+  <a href="https://github.com/reapertakumi/Crumbs-Extension/releases/latest">Latest release</a>
+</p>
+
+Connect it to your Pi once with your Crumbs address and sign-in. See
+[docs/using.md](docs/using.md#browser-extension).
+
+---
+
+## Features
+
+### Your crumbs
+- **A visual grid.** Every bookmark is a card with a thumbnail, favicon, name, site, description and tags.
+- **Filled in for you.** Paste a link and Crumbs takes the page's title (the one on the browser tab), description,
+  favicon and preview picture. YouTube links get the video title, channel and thumbnail.
+- **Search links look like searches.** A saved Google, YouTube, Bing, DuckDuckGo, Amazon, Reddit or GitHub search
+  shows the site's icon and name with the words you searched.
+- **Your own pictures.** Upload, paste (Ctrl+V) or drag in any image, like a screenshot.
+- **Refresh.** Get a new preview, title or description for one crumb, a selection, or everything. Pictures you set
+  yourself are kept.
+
+### Keeping them tidy
+- **Folders and subfolders** in a sidebar tree, each with its own color and icon. Drag to reorder or nest them.
+  Crumbs without a folder sit in **Uncategorized**.
+- **Tags** with their own sidebar list. Rename or remove them, and search with `#tag`.
+- **Select many at once.** Drag a box, tick cards, Shift-click a range or press Ctrl+A. Then move, tag, refresh,
+  export or trash them, or drag them onto a folder, tag or the Trash.
+- **Instant search** (press `/`) across name, link, description and folder. **Sort** by title, created, updated,
+  link, description or folder.
+- **Trash** with Undo, emptied after 30 days.
+- **No duplicates** (optional): a link only once everywhere, or only once per folder.
+- **Broken link checker** that marks dead links with a **Broken** badge.
+
+### Bringing them in and out
+- **Import** from any browser's bookmark file (.html), Chrome or Crumbs .json, .csv (Pocket, Raindrop, …),
+  Markdown or a plain list of links. Folders and tags are kept.
+- After an import, thumbnails and favicons are fetched for you, with 3 retries. You can review anything that
+  was skipped and keep it anyway.
+- **Export** to the same formats.
+
+### Your look
+- Black and white by default, with **light, dark or system** theme.
+- Four **layouts**: Grid, Gallery, List and Compact. A **size slider** (or Ctrl + scroll) makes cards bigger or
+  smaller.
+- **Backgrounds:** plain, dots, grid, lines, paper or your own photo.
+- **Profiles** with a display name and a picture: a letter, one of 29 icons, or your own photo.
+
+### Accounts and admin
+- Usernames and passwords, stored as salted PBKDF2-SHA256 hashes. Every user has their own crumbs.
+- The first account is the admin. Admins can open **registration**, turn on **no-login mode** for a home network,
+  and for each user rename them, change their picture, set a **storage limit**, make them admin, **block** them,
+  reset their password, import or export their crumbs, or delete them.
+
+### Safe on your Pi
+- **Encrypted database** (Adiantum). The key lives in `.env`, or you type it after each start.
+  See [docs/encryption.md](docs/encryption.md).
+- **HTTP and HTTPS side by side**, with a self-made or your own certificate. See [docs/https.md](docs/https.md).
+- **Nightly encrypted backups** at 3:00 (the newest 7 are kept), plus **Back up now** and downloads in Admin.
+- **Light:** one Go binary and SQLite in a `scratch` container, capped at 128 MB of RAM. Thumbnails are made by
+  your browser, stored on the Pi and cached by the browser for fast loading.
+
+---
 
 ## Documentation
 
 | Guide | What's in it |
 | ----- | ------------ |
 | [Install](docs/install.md) | Docker, the folder, the database key, first start |
-| [Encryption](docs/encryption.md) | What's encrypted, the key, `.env` or unlock by hand, converting an older database |
+| [Using Crumbs](docs/using.md) | Adding crumbs, the header, browser extension, bookmarklet, no-login mode, thumbnails |
+| [Encryption](docs/encryption.md) | What's encrypted, the key, `.env` or unlocking by hand, converting an older database |
 | [HTTPS](docs/https.md) | HTTP and HTTPS side by side, the certificate, HTTPS only |
-| [Backups & updates](docs/backups.md) | Nightly backups, restore, export, updating, going back to an older version |
-| [Using Crumbs](docs/using.md) | Tour: adding crumbs, the header, browser extension, bookmarklet, open mode, thumbnails |
+| [Backups & updates](docs/backups.md) | Nightly backups, restoring, exporting, updating, going back to an older version |
 | [Configuration](docs/configuration.md) | `.env` settings, ports, memory limit |
 | [Troubleshooting](docs/troubleshooting.md) | Key not picked up, can't connect, pull denied, missing thumbnails |
 | [API](docs/api.md) | Every endpoint, for scripts and the browser extension |
-
-**Browser extension:** save the page you're on with one click using [Crumbs-Extension](https://github.com/reapertakumi/Crumbs-Extension) for Chrome ([download the latest release](https://github.com/reapertakumi/Crumbs-Extension/releases/latest)).
-
----
-
-## Features
-
-- **Visual grid.** Every bookmark is a card with a thumbnail, favicon, name, site and description.
-- **Smart previews.** Paste a link and Crumbs fills in the page title, description, favicon and preview image.
-  YouTube links get the real video title, channel name and video thumbnail.
-- **Thumbnails are made in your browser.** Your browser downloads and resizes the images, then stores
-  them on the Pi. Thumbnails always load from the Pi, never from the original site.
-- **Your own images.** You can upload, paste (Ctrl+V) or drag in any image, for example a screenshot.
-- **Folders and subfolders.** The sidebar (the ☰ button) shows every folder as a tree with its bookmarks inside.
-  Hover a folder to collapse or expand it, add a subfolder or edit it. Give each folder its own color and icon, and
-  drag folders to reorder them: drop on the top or bottom edge of another folder to go above or below it, or in the
-  middle to go inside it. Bookmarks without a folder live in **Uncategorized**.
-- **Browser extension.** Save the page you're on with one click from Chrome: thumbnail, favicon, name, URL, folder and
-  description. See [docs/using.md](docs/using.md#browser-extension).
-- **Tags.** Give a crumb any number of tags in the editor (type, then Enter). Tags show on the cards and get their own
-  list in the sidebar, where you can rename or remove them. Search `#recipes` to find a tag.
-- **Select several crumbs.** Click and drag across the cards to draw a selection box (start anywhere, even on a card), tick the box in a card's corner
-  (Shift-click for a range), or press Ctrl+A for everything shown,
-  then move, tag, refresh, export or trash them all at once from the bar at the bottom.
-- **Drag & drop.** Select cards first, then drag them (or a sidebar row) onto a folder, **Uncategorized**, a tag or the **Trash**. Dragging a
-  selected crumb takes the whole selection along.
-- **Broken link checker.** **Settings → Maintenance → Check now**: the Pi visits every link once and marks the ones
-  that are gone (404, site not found, server errors) with a **Broken** badge and a **Broken links** view. It only runs
-  when you press the button.
-- **Refresh all previews.** **Settings → Maintenance → Refresh**: fresh thumbnails and icons for everything. Thumbnails
-  you uploaded or pasted yourself are kept.
-- **Automatic backups.** Every night at 3:00 the database, thumbnails and photos are zipped into `data/backups`, and the
-  newest 7 are kept. Admins can **Back up now** and download any backup from **Admin → Backups**.
-- **Trash.** Deleting a crumb moves it to the **Trash** (with Undo). Restore it or delete it forever from there.
-  The trash empties itself after 30 days.
-- **No duplicates (optional).** Turn on **Settings → Duplicates → Remove duplicates** and pick **Everywhere** (a link
-  is saved only once) or **Not across folders** (the same link may sit in different folders, but only once per
-  folder). Crumbs then refuses new duplicates, skips them on import, and offers to move existing extra copies to the
-  Trash. The copy with a thumbnail, or else the oldest one, is kept. Links count as the same even with or without
-  `www.`, `https`, a trailing `/` or a `#section`.
-- **Sorting.** Sort by title, date created, last updated, URL, description or folder. Click the same option again to flip
-  between ascending and descending.
-- **Profiles.** Pick a display name and a picture: the first letter of your name, one of 29 built-in icons, or your own photo,
-  which you drag and zoom into place inside a circle.
-- **Import & export.** Bring bookmarks in from any browser (bookmark .html file), Chrome or Crumbs .json, .csv (Pocket,
-  Raindrop and others), Markdown or a plain list of links. Folders are kept. Export to the same formats. Right after an
-  import your browser fetches thumbnails and favicons for the new crumbs, retrying the ones that fail up to 3 times.
-  If anything was skipped, **Show** lists it: links you already have (skip them or save a copy in any folder) and
-  links that aren't web links (fix them to keep them, or remove them).
-- **Instant search.** The small search pill in the header grows when you click it. It searches name, URL, description and folder as you type. Press `/` to jump to it.
-- **Accounts.** Usernames and passwords. The first account is the admin, and each user has their own bookmarks.
-  Passwords are stored as salted PBKDF2-SHA256 hashes, never in plain text.
-- **Optional open mode.** The admin can turn login off so anyone on your network can use Crumbs without a password.
-- **Admin tools.** Open **registration** so people can sign themselves up, or keep adding users yourself. Every user has a
-  ⋯ menu: change their name or picture, set a **storage limit**, make them admin, **block** them, reset their password,
-  import/export their bookmarks or delete them.
-- **Black and white.** Rounded corners, no colors. In Settings: light, dark or system theme, three card sizes, four layouts
-  (Grid, Gallery, List, Compact) and backgrounds (plain, dots, grid, lines, paper or your own photo, black & white if you like).
-- **Encrypted database.** Accounts, sign-ins, folders, bookmarks and tags are stored encrypted with a key only you
-  know, and backups are encrypted too. Unlock automatically from `.env` or by typing the key after each start.
-  See [docs/encryption.md](docs/encryption.md).
-- **HTTP and HTTPS.** Both at once; Crumbs makes its own certificate or uses yours. See [docs/https.md](docs/https.md).
-- **Lightweight.** One Go binary plus SQLite, in a `scratch` container capped at 128 MB of RAM.
 
 ---
 
