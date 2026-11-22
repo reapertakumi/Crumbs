@@ -63,10 +63,10 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   description. See [Browser extension](#browser-extension).
 - **Tags.** Give a crumb any number of tags in the editor (type, then Enter). Tags show on the cards and get their own
   list in the sidebar, where you can rename or remove them. Search `#recipes` to find a tag.
-- **Select several crumbs.** Drag a box across the cards (start on empty space), tick the box in a card's corner
+- **Select several crumbs.** Click and drag across the cards to draw a selection box (start anywhere, even on a card), tick the box in a card's corner
   (Shift-click for a range), or press Ctrl+A for everything shown,
   then move, tag, refresh, export or trash them all at once from the bar at the bottom.
-- **Drag & drop.** Drag cards (or sidebar rows) onto a folder, **Uncategorized**, a tag or the **Trash**. Dragging a
+- **Drag & drop.** Select cards first, then drag them (or a sidebar row) onto a folder, **Uncategorized**, a tag or the **Trash**. Dragging a
   selected crumb takes the whole selection along.
 - **Broken link checker.** **Settings → Maintenance → Check now**: the Pi visits every link once and marks the ones
   that are gone (404, site not found, server errors) with a **Broken** badge and a **Broken links** view. It only runs

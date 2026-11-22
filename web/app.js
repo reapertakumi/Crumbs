@@ -647,7 +647,7 @@ function card(b) {
     onclick: (e) => toggleSelect(b.id, e.shiftKey),
   }, icon('check'));
 
-  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : ''), draggable: 'true' },
+  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : ''), draggable: 'false' },
     h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url, draggable: 'false' }, thumb, body),
     tags, check, actions);
   el.dataset.id = b.id;
@@ -812,6 +812,7 @@ function updateSelection() {
   for (const [id, el] of cards) {
     const on = S.sel.has(id);
     el.classList.toggle('selected', on);
+    el.draggable = on; // only selected cards drag into folders; others start a selection box
     el.querySelector('.card-check')?.setAttribute('aria-checked', String(on));
   }
   const bar = $('#selbar');
@@ -894,9 +895,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---- drag a box across the grid to select ----
-// Press on empty space (between or around the cards) and drag: every card the
-// box touches gets selected. Shift / Ctrl / Cmd adds to the current selection.
-// Pressing on a card itself still drags it into a folder, as before.
+// Press anywhere in the grid (on a card or between cards) and drag: every card
+// the box touches gets selected. Shift / Ctrl / Cmd adds to the current selection.
+// Selected cards are the ones that drag into a folder.
 
 const lasso = { on: false, x0: 0, y0: 0, x: 0, y: 0, base: new Set(), box: null, raf: 0, moved: false };
 
@@ -934,11 +935,19 @@ function lassoScroll() {
 
 $('#main').addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.pointerType !== 'mouse') return;
-  if (e.target.closest('.card, button, a, input, select, textarea, .view-head')) return;
-  e.preventDefault(); // no text selection while dragging the box
-  Object.assign(lasso, { on: true, moved: false, x0: e.pageX, y0: e.pageY, x: e.pageX, y: e.pageY });
+  // Buttons and fields keep working; a selected card drags into a folder instead.
+  if (e.target.closest('button, input, select, textarea, .view-head, .card-tags, .card.selected')) return;
+  e.preventDefault(); // no text selection and no "dragging the picture" while drawing the box
+  Object.assign(lasso, { on: true, moved: false, onCard: !!e.target.closest('.card'), x0: e.pageX, y0: e.pageY, x: e.pageX, y: e.pageY });
   lasso.base = e.shiftKey || e.ctrlKey || e.metaKey ? new Set(S.sel) : new Set();
 });
+// After drawing a box that started on a card, the release must not open the link.
+document.addEventListener('click', (e) => {
+  if (!lasso.justDrew) return;
+  lasso.justDrew = false;
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 document.addEventListener('pointermove', (e) => {
   if (!lasso.on) return;
   lasso.x = e.pageX;
@@ -961,7 +970,9 @@ document.addEventListener('pointerup', () => {
     lasso.box.remove();
     document.body.classList.remove('lassoing');
     lastPicked = null;
-  } else if (!lasso.base.size) {
+    lasso.justDrew = true;
+    setTimeout(() => { lasso.justDrew = false; }, 0); // only the click that ends this drag
+  } else if (!lasso.base.size && !lasso.onCard) {
     clearSelection(); // a click on empty space clears the selection
   }
 });
