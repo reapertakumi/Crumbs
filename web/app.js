@@ -662,6 +662,42 @@ async function loadBookmarks() {
   renderTree();
 }
 
+// Search-result links (Google, YouTube, …) have no page picture worth taking,
+// so their card shows a drawn search box with the words that were searched.
+const SEARCHES = [
+  [/(^|\.)google\.[a-z.]+$/, '/search', 'q', 'Google', '#4285f4'],
+  [/(^|\.)youtube\.com$/, '/results', 'search_query', 'YouTube', '#ff0033'],
+  [/(^|\.)bing\.com$/, '/search', 'q', 'Bing', '#00809d'],
+  [/(^|\.)duckduckgo\.com$/, '/', 'q', 'DuckDuckGo', '#de5833'],
+  [/(^|\.)search\.brave\.com$/, '/search', 'q', 'Brave', '#fb542b'],
+  [/(^|\.)ecosia\.org$/, '/search', 'q', 'Ecosia', '#36a35a'],
+  [/(^|\.)search\.yahoo\.com$/, '/search', 'p', 'Yahoo', '#6001d2'],
+  [/(^|\.)startpage\.com$/, '/', 'query', 'Startpage', '#6573ff'],
+  [/(^|\.)reddit\.com$/, '/search', 'q', 'Reddit', '#ff4500'],
+  [/(^|\.)amazon\.[a-z.]+$/, '/s', 'k', 'Amazon', '#ff9900'],
+  [/(^|\.)github\.com$/, '/search', 'q', 'GitHub', '#8957e5'],
+];
+function searchOf(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^www\./, '');
+  for (const [re, path, param, site, color] of SEARCHES) {
+    if (!re.test(host) || !u.pathname.startsWith(path)) continue;
+    const q = (u.searchParams.get(param) || '').trim();
+    if (q) return { site, q, color };
+  }
+  return null;
+}
+function searchThumb(s) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = '<path fill-rule="evenodd" d="M10.5 3a7.5 7.5 0 0 1 6 12l4.8 4.8-1.5 1.5-4.8-4.8A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/>';
+  return h('div', { class: 'thumb-search' },
+    h('div', { class: 'ts-site', text: s.site, style: `--ts-color:${s.color}` }),
+    h('div', { class: 'ts-box' }, svg, h('span', { text: s.q })));
+}
+
 function buildCards() {
   cards = new Map([...S.list, ...S.trash].map((b) => [b.id, card(b)]));
   orderGrid();
@@ -673,6 +709,7 @@ function card(b) {
   const thumb = h('div', { class: 'thumb' },
     b.thumb
       ? h('img', { src: b.thumb, alt: '', loading: 'lazy', decoding: 'async', ...noDrag })
+      : searchOf(b.url) ? searchThumb(searchOf(b.url))
       : h('div', { class: 'thumb-empty' },
           b.icon ? h('img', { src: b.icon, alt: '', loading: 'lazy', ...noDrag }) : h('span', { text: firstLetter(b.name || host) })),
     b.link === 2 && !b.deleted ? h('span', { class: 'badge-broken', title: b.linkError || 'This link seems broken' }, icon('alert'), 'Broken') : null);
