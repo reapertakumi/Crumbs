@@ -97,7 +97,7 @@ function writeStore(key, val) {
 
 const prefs = Object.assign(
   {
-    theme: 'system', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    theme: 'system', palette: 'mono', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
   },
   readStore('crumbs.prefs', {}));
@@ -111,10 +111,33 @@ const SCALE_MIN = 150, SCALE_MAX = 450;
 // Settings saved before the slider existed only have Small/Medium/Large.
 if (!readStore('crumbs.prefs', {}).scale) prefs.scale = SIZE_PRESETS[prefs.size] || 250;
 
+// ---- day / night / system toggle in the header ----
+const DARK_MQ = matchMedia('(prefers-color-scheme: dark)');
+const THEME_ORDER = ['system', 'light', 'dark'];
+const THEME_ICONS = {
+  system: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  dark: '<path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/>',
+};
+const THEME_NAMES = { system: 'System', light: 'Day', dark: 'Night' };
+function renderThemeBtn() {
+  const btn = document.getElementById('theme-btn');
+  if (!btn) return;
+  const t = THEME_ORDER.includes(prefs.theme) ? prefs.theme : 'system';
+  btn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${THEME_ICONS[t]}</svg>`;
+  const next = THEME_NAMES[THEME_ORDER[(THEME_ORDER.indexOf(t) + 1) % 3]];
+  btn.title = `Theme: ${THEME_NAMES[t]} (click for ${next})`;
+  btn.setAttribute('aria-label', btn.title);
+}
+
 function applyPrefs() {
   const root = document.documentElement;
   if (prefs.theme === 'light' || prefs.theme === 'dark') root.dataset.theme = prefs.theme;
   else delete root.dataset.theme;
+  root.toggleAttribute('data-dark', prefs.theme === 'dark' || (prefs.theme !== 'light' && DARK_MQ.matches));
+  if (prefs.palette && prefs.palette !== 'mono') root.dataset.palette = prefs.palette;
+  else delete root.dataset.palette;
+  renderThemeBtn();
   // Card scale: the smallest card width in px (Small/Medium/Large are 190/250/330).
   const px = Number(prefs.scale) || SIZE_PRESETS[prefs.size] || 250;
   root.style.setProperty('--card-min', px + 'px');
@@ -2802,6 +2825,7 @@ function renderSettings() {
   $('#bg-strength').value = String(prefs.bgStrength);
   $('#set-newtab').checked = prefs.newTab;
   $('#set-scale').value = String(prefs.scale);
+  $('#set-palette').value = prefs.palette || 'mono';
   $('#scale-val').textContent = Math.round((prefs.scale / 250) * 100) + '%';
   renderDup();
 }
@@ -2820,6 +2844,15 @@ function setScale(px) {
 }
 
 $('#set-scale').addEventListener('input', (e) => setScale(Number(e.target.value)));
+$('#theme-btn').addEventListener('click', () => {
+  const t = THEME_ORDER.includes(prefs.theme) ? prefs.theme : 'system';
+  prefs.theme = THEME_ORDER[(THEME_ORDER.indexOf(t) + 1) % 3];
+  savePrefs();
+  applyPrefs();
+  if ($('#settings').open) renderSettings();
+});
+DARK_MQ.addEventListener('change', () => { if (prefs.theme === 'system') applyPrefs(); });
+$('#set-palette').addEventListener('change', (e) => { prefs.palette = e.target.value; savePrefs(); applyPrefs(); });
 $('#main').addEventListener('wheel', (e) => {
   if (!e.ctrlKey) return; // plain scrolling stays scrolling
   e.preventDefault();     // instead of zooming the whole page
@@ -2886,7 +2919,7 @@ $('#reset-settings').addEventListener('click', async () => {
   if (!ok) return;
   try { ['crumbs.prefs', 'crumbs.tree', 'crumbs.bgimg'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
   Object.assign(prefs, {
-    theme: 'system', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    theme: 'system', palette: 'mono', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
   });
   treeState.open.clear();
