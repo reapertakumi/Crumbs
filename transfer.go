@@ -64,6 +64,7 @@ type importItem struct {
 	URL         string   `json:"url"`
 	Description string   `json:"description"`
 	Path        []string `json:"path"` // folder names from the top, e.g. ["Work", "Projects"]
+	FolderID    *int64   `json:"folderId"` // an existing folder; wins over Path (used by "save a copy in…")
 	Created     int64    `json:"created"`
 	Tags        []string `json:"tags"`
 }
@@ -71,6 +72,20 @@ type importItem struct {
 type importReq struct {
 	Items          []importItem `json:"items"`
 	SkipDuplicates bool         `json:"skipDuplicates"`
+	// AllowDuplicates: the user reviewed these and wants them saved even if
+	// the link is already there (the "save a copy" choice).
+	AllowDuplicates bool `json:"allowDuplicates"`
+}
+
+// skippedItem tells the browser why an item was not imported, so the user
+// can review it ("Show" next to "skipped 6").
+type skippedItem struct {
+	Index          int    `json:"index"`  // position in the request's items
+	Reason         string `json:"reason"` // "invalid" or "duplicate"
+	Message        string `json:"message,omitempty"`
+	ExistingName   string `json:"existingName,omitempty"`
+	ExistingFolder string `json:"existingFolder,omitempty"` // "" = Uncategorized
+	InImport       bool   `json:"inImport,omitempty"`       // the other copy is earlier in this same import
 }
 
 func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
@@ -97,39 +112,69 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 	}
 	key := func(parent int64, name string) string { return fmt.Sprintf("%d\x00%s", parent, strings.ToLower(name)) }
 	folderID := map[string]int64{}
+	folderName := map[int64]string{}
+	folderParent := map[int64]int64{}
 	for _, f := range folders {
 		var p int64
 		if f.ParentID != nil {
 			p = *f.ParentID
 		}
 		folderID[key(p, f.Name)] = f.ID
+		folderName[f.ID] = f.Name
+		folderParent[f.ID] = p
 	}
+	pathOf := func(id *int64) string {
+		if id == nil {
+			return ""
+		}
+		var parts []string
+		for cur, n := *id, 0; cur != 0 && n < 100; cur, n = folderParent[cur], n+1 {
+			parts = append([]string{folderName[cur]}, parts...)
+		}
+		return strings.Join(parts, " / ")
+	}
+
 	// Duplicates: the user's own rule wins; the "skip" checkbox alone means "same link anywhere".
 	mode := a.userDedupe(uid)
 	if mode == "" && in.SkipDuplicates {
 		mode = "all"
 	}
-	seen := map[string]bool{}
+	if in.AllowDuplicates {
+		mode = ""
+	}
+	type dupInfo struct {
+		name     string
+		folder   *int64
+		inImport bool
+	}
+	seen := map[string]dupInfo{}
 	if mode != "" {
 		for _, d := range a.activeBookmarks(uid) {
-			seen[dupKey(mode, d.url, d.folder)] = true
+			seen[dupKey(mode, d.url, d.folder)] = dupInfo{name: d.name, folder: d.folder}
 		}
 	}
 
 	// Clean everything up front and check the storage limit once.
 	type clean struct {
 		bookmarkIn
+		index   int
 		path    []string
+		folder  *int64
 		created int64
 	}
 	var items []clean
-	skipped := 0
+	var skipped []skippedItem
 	var textBytes int64
-	for _, it := range in.Items {
-		c := clean{bookmarkIn: bookmarkIn{Name: it.Name, URL: it.URL, Description: it.Description, Tags: it.Tags}, created: it.Created}
+	for i, it := range in.Items {
+		c := clean{bookmarkIn: bookmarkIn{Name: it.Name, URL: it.URL, Description: it.Description, Tags: it.Tags}, index: i, created: it.Created}
 		if err := a.cleanBookmark(uid, &c.bookmarkIn); err != nil {
-			skipped++
+			skipped = append(skipped, skippedItem{Index: i, Reason: "invalid", Message: err.Error()})
 			continue
+		}
+		if it.FolderID != nil {
+			if _, ok := folderName[*it.FolderID]; ok {
+				c.folder = it.FolderID
+			}
 		}
 		for _, p := range it.Path {
 			if p = clip(oneLine(p), 100); p != "" {
@@ -154,49 +199,67 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 	}
 	defer tx.Rollback()
 	now := time.Now().Unix()
-	newFolders, added := 0, 0
+	newFolders := 0
+	ids := []int64{}
 	for _, it := range items {
 		var parent int64
-		for _, name := range it.path {
-			k := key(parent, name)
-			id, ok := folderID[k]
-			if !ok {
-				res, err := tx.Exec(`INSERT INTO folders(user_id, parent_id, name, created_at) VALUES (?, ?, ?, ?)`,
-					uid, nullID(ptrIf(parent)), name, now)
-				if err != nil {
-					jsonErr(w, http.StatusInternalServerError, err.Error())
-					return
+		if it.folder != nil {
+			parent = *it.folder
+		} else {
+			for _, name := range it.path {
+				k := key(parent, name)
+				id, ok := folderID[k]
+				if !ok {
+					res, err := tx.Exec(`INSERT INTO folders(user_id, parent_id, name, created_at) VALUES (?, ?, ?, ?)`,
+						uid, nullID(ptrIf(parent)), name, now)
+					if err != nil {
+						jsonErr(w, http.StatusInternalServerError, err.Error())
+						return
+					}
+					id, _ = res.LastInsertId()
+					folderID[k] = id
+					folderName[id] = name
+					folderParent[id] = parent
+					newFolders++
 				}
-				id, _ = res.LastInsertId()
-				folderID[k] = id
-				newFolders++
+				parent = id
 			}
-			parent = id
 		}
 		if mode != "" {
 			k := dupKey(mode, it.URL, ptrIf(parent))
-			if seen[k] {
-				skipped++
+			if d, dup := seen[k]; dup {
+				skipped = append(skipped, skippedItem{
+					Index: it.index, Reason: "duplicate",
+					ExistingName: d.name, ExistingFolder: pathOf(d.folder), InImport: d.inImport,
+				})
 				continue
 			}
-			seen[k] = true
+			seen[k] = dupInfo{name: it.Name, folder: ptrIf(parent), inImport: true}
 		}
 		created := it.created
 		if created <= 0 || created > now {
 			created = now
 		}
-		if _, err := tx.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, tags, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, uid, nullID(ptrIf(parent)), it.Name, it.URL, it.Description, joinTags(it.Tags), created, now); err != nil {
+		res, err := tx.Exec(`INSERT INTO bookmarks(user_id, folder_id, name, url, description, tags, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, uid, nullID(ptrIf(parent)), it.Name, it.URL, it.Description, joinTags(it.Tags), created, now)
+		if err != nil {
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		added++
+		id, _ := res.LastInsertId()
+		ids = append(ids, id)
 	}
 	if err := tx.Commit(); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"added": added, "skipped": skipped, "folders": newFolders})
+	if skipped == nil {
+		skipped = []skippedItem{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"added": len(ids), "ids": ids, "folders": newFolders,
+		"skipped": len(skipped), "skippedItems": skipped,
+	})
 }
 
 // ptrIf returns nil for 0 (no folder) and a pointer otherwise.

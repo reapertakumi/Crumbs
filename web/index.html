@@ -430,6 +430,44 @@
     </div>
   </dialog>
 
+  <!-- Review what an import skipped -->
+  <dialog id="review-dlg">
+    <div class="modal-body">
+      <div class="modal-head">
+        <h2>Skipped links</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <div class="review-sec" id="review-dups">
+        <div class="review-head">
+          <h3>Already saved <span class="muted" id="review-dup-count"></span></h3>
+          <select id="review-dup-all" aria-label="Choose for all duplicates"></select>
+        </div>
+        <p class="muted small">You already have these links. Skip them, or save another copy, for example in a different folder.</p>
+        <ul class="review-list" id="review-dup-list"></ul>
+      </div>
+
+      <div class="review-sec" id="review-bad">
+        <div class="review-head">
+          <h3>Not a web link <span class="muted" id="review-bad-count"></span></h3>
+          <span class="review-bulk">
+            <button class="btn small" type="button" id="review-bad-keep">Keep all</button>
+            <button class="btn small" type="button" id="review-bad-remove">Remove all</button>
+          </span>
+        </div>
+        <p class="muted small">Crumbs saves http and https links. Fix a link to keep it (for example add https://), or remove it.</p>
+        <ul class="review-list" id="review-bad-list"></ul>
+      </div>
+
+      <p class="error" id="review-error" hidden></p>
+      <div class="row">
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Close</button>
+        <button type="button" class="btn primary" id="review-import">Import</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Crop a profile photo -->
   <dialog id="crop-dlg" class="narrow">
     <div class="modal-body">

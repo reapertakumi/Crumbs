@@ -63,7 +63,8 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
   description. See [Browser extension](#browser-extension).
 - **Tags.** Give a crumb any number of tags in the editor (type, then Enter). Tags show on the cards and get their own
   list in the sidebar, where you can rename or remove them. Search `#recipes` to find a tag.
-- **Select several crumbs.** Tick the box in a card's corner (Shift-click for a range, Ctrl+A for everything shown),
+- **Select several crumbs.** Drag a box across the cards (start on empty space), tick the box in a card's corner
+  (Shift-click for a range), or press Ctrl+A for everything shown,
   then move, tag, refresh, export or trash them all at once from the bar at the bottom.
 - **Drag & drop.** Drag cards (or sidebar rows) onto a folder, **Uncategorized**, a tag or the **Trash**. Dragging a
   selected crumb takes the whole selection along.
@@ -86,8 +87,10 @@ Finding crumbs is easy. Keeping them is the hard part. Now it isn't.
 - **Profiles.** Pick a display name and a picture: the first letter of your name, one of 29 built-in icons, or your own photo,
   which you drag and zoom into place inside a circle.
 - **Import & export.** Bring bookmarks in from any browser (bookmark .html file), Chrome or Crumbs .json, .csv (Pocket,
-  Raindrop and others), Markdown or a plain list of links. Folders are kept. Export to the same formats. Imported links
-  can fetch their thumbnails in one click.
+  Raindrop and others), Markdown or a plain list of links. Folders are kept. Export to the same formats. Right after an
+  import your browser fetches thumbnails and favicons for the new crumbs, retrying the ones that fail up to 3 times.
+  If anything was skipped, **Show** lists it: links you already have (skip them or save a copy in any folder) and
+  links that aren't web links (fix them to keep them, or remove them).
 - **Instant search.** The small search pill in the header grows when you click it. It searches name, URL, description and folder as you type. Press `/` to jump to it.
 - **Accounts.** Usernames and passwords. The first account is the admin, and each user has their own bookmarks.
   Passwords are stored as salted PBKDF2-SHA256 hashes, never in plain text.

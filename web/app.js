@@ -893,6 +893,79 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAllVisible(); }
 });
 
+// ---- drag a box across the grid to select ----
+// Press on empty space (between or around the cards) and drag: every card the
+// box touches gets selected. Shift / Ctrl / Cmd adds to the current selection.
+// Pressing on a card itself still drags it into a folder, as before.
+
+const lasso = { on: false, x0: 0, y0: 0, x: 0, y: 0, base: new Set(), box: null, raf: 0, moved: false };
+
+function lassoRect() {
+  // Page coordinates, so scrolling while dragging keeps the start point fixed.
+  const l = Math.min(lasso.x0, lasso.x), t = Math.min(lasso.y0, lasso.y);
+  return { left: l, top: t, right: Math.max(lasso.x0, lasso.x), bottom: Math.max(lasso.y0, lasso.y) };
+}
+
+function lassoUpdate() {
+  const r = lassoRect();
+  lasso.box.style.setProperty('left', `${r.left - scrollX}px`);
+  lasso.box.style.setProperty('top', `${r.top - scrollY}px`);
+  lasso.box.style.setProperty('width', `${r.right - r.left}px`);
+  lasso.box.style.setProperty('height', `${r.bottom - r.top}px`);
+  const picked = new Set(lasso.base);
+  for (const el of $('#grid').children) {
+    if (el.hidden) continue;
+    const c = el.getBoundingClientRect();
+    const cl = c.left + scrollX, ct = c.top + scrollY;
+    if (cl < r.right && cl + c.width > r.left && ct < r.bottom && ct + c.height > r.top) picked.add(Number(el.dataset.id));
+  }
+  S.sel = picked;
+  updateSelection();
+}
+
+// Scroll the page while the pointer sits near the top or bottom edge.
+function lassoScroll() {
+  if (!lasso.on) return;
+  const y = lasso.y - scrollY, edge = 60;
+  const dy = y < edge + 64 ? -12 : y > innerHeight - edge ? 12 : 0;
+  if (dy) { scrollBy(0, dy); lasso.y += dy; lassoUpdate(); }
+  lasso.raf = requestAnimationFrame(lassoScroll);
+}
+
+$('#main').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || e.pointerType !== 'mouse') return;
+  if (e.target.closest('.card, button, a, input, select, textarea, .view-head')) return;
+  e.preventDefault(); // no text selection while dragging the box
+  Object.assign(lasso, { on: true, moved: false, x0: e.pageX, y0: e.pageY, x: e.pageX, y: e.pageY });
+  lasso.base = e.shiftKey || e.ctrlKey || e.metaKey ? new Set(S.sel) : new Set();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!lasso.on) return;
+  lasso.x = e.pageX;
+  lasso.y = e.pageY;
+  if (!lasso.moved) {
+    if (Math.hypot(lasso.x - lasso.x0, lasso.y - lasso.y0) < 5) return; // a plain click
+    lasso.moved = true;
+    lasso.box = h('div', { class: 'lasso' });
+    document.body.append(lasso.box);
+    document.body.classList.add('lassoing');
+    lasso.raf = requestAnimationFrame(lassoScroll);
+  }
+  lassoUpdate();
+});
+document.addEventListener('pointerup', () => {
+  if (!lasso.on) return;
+  lasso.on = false;
+  cancelAnimationFrame(lasso.raf);
+  if (lasso.moved) {
+    lasso.box.remove();
+    document.body.classList.remove('lassoing');
+    lastPicked = null;
+  } else if (!lasso.base.size) {
+    clearSelection(); // a click on empty space clears the selection
+  }
+});
+
 // ---------- sidebar ----------
 
 // Smoothly move the cards when the layout jumps (sidebar opening/closing):
@@ -1927,6 +2000,43 @@ $('#io-export').addEventListener('click', async () => {
   }
 });
 
+// What the last import skipped, so "Show" can open a review of it.
+let review = null; // { items, skipped, user }
+
+function importPath() { return ioUser ? `/api/users/${ioUser.id}/import` : '/api/import'; }
+
+function describeImport(r, prefix = 'Added') {
+  const dups = r.skippedItems.filter((s) => s.reason === 'duplicate').length;
+  const bad = r.skippedItems.length - dups;
+  const parts = [];
+  if (dups) parts.push(`${dups} already saved`);
+  if (bad) parts.push(`${bad} not a web link`);
+  return `${prefix} ${r.added} crumb${r.added === 1 ? '' : 's'}`
+    + (r.folders ? ` and ${r.folders} folder${r.folders === 1 ? '' : 's'}` : '')
+    + (r.skipped ? `. Skipped ${r.skipped}: ${parts.join(', ')}. ` : '.');
+}
+
+function showImportResult(r, items, prefix) {
+  const res = $('#io-result');
+  res.hidden = false;
+  res.replaceChildren(describeImport(r, prefix));
+  review = r.skipped ? { items, skipped: r.skippedItems, user: ioUser } : null;
+  if (review) res.append(h('button', { type: 'button', class: 'linkish', text: 'Show', onclick: openReview }));
+}
+
+// Right after an import: fetch thumbnails and favicons for the new crumbs,
+// and try the ones that fail up to 3 more times.
+async function previewsAfterImport(ids) {
+  if (!ids || !ids.length) return;
+  const set = new Set(ids);
+  const status = $('#io-fetch-status');
+  const r = await refreshPreviews(S.list.filter((b) => set.has(b.id)), {
+    onlyMissing: true, retries: 3, status: (s) => { status.textContent = s; },
+  });
+  updatePreviewCount();
+  if (r && !$('#io-dlg').open) toast(r.msg);
+}
+
 $('#io-file').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
@@ -1938,56 +2048,231 @@ $('#io-file').addEventListener('change', async (e) => {
     const items = parseImport(await file.text(), file.name);
     if (!items.length) { res.textContent = 'No links found in that file.'; return; }
     res.textContent = `Importing ${items.length} links…`;
-    const r = await api('POST', ioUser ? `/api/users/${ioUser.id}/import` : '/api/import',
-      { items, skipDuplicates: $('#io-skip').checked });
-    res.textContent = `Added ${r.added} crumb${r.added === 1 ? '' : 's'}`
-      + (r.folders ? ` and ${r.folders} folder${r.folders === 1 ? '' : 's'}` : '')
-      + (r.skipped ? `. Skipped ${r.skipped} (already saved or not a web link).` : '.');
-    if (ioUser) { if ($('#admin').open) await loadUsers(); }
-    else { await loadBookmarks(); updatePreviewCount(); }
+    const r = await api('POST', importPath(), { items, skipDuplicates: $('#io-skip').checked });
+    showImportResult(r, items);
+    if (ioUser) { if ($('#admin').open) await loadUsers(); return; }
+    await loadBookmarks();
+    updatePreviewCount();
+    previewsAfterImport(r.ids);
   } catch (err) {
     res.textContent = 'Import failed: ' + err.message;
   }
 });
 
+// ---- review what was skipped ----
+
+const reviewDlg = $('#review-dlg');
+
+// <option>s for "save a copy in …": Uncategorized ("u") and every folder (its id).
+function copyTargetOptions() {
+  const out = [h('option', { value: 'u', text: 'Uncategorized' })];
+  const walk = (pid, depth) => {
+    for (const f of S.kids.get(pid) || []) {
+      out.push(h('option', { value: String(f.id), text: ' '.repeat(depth + 1) + f.name }));
+      walk(f.id, depth + 1);
+    }
+  };
+  walk(0, 0);
+  return out;
+}
+
+function dupChoiceSelect(item) {
+  const fileFolder = (item.path || []).join(' / ') || 'Uncategorized';
+  const sel = h('select', { class: 'review-choice', 'aria-label': 'What to do with this link' },
+    h('option', { value: 'skip', text: "Don't import" }),
+    h('option', { value: 'file', text: `Save a copy in ${fileFolder} (from the file)` }),
+    // Folders belong to the signed-in user; an admin importing for someone
+    // else can only use the folders from the file.
+    review.user ? null : h('optgroup', { label: 'Save a copy in…' }, ...copyTargetOptions()));
+  sel.addEventListener('change', updateReviewCount);
+  return sel;
+}
+
+function openReview() {
+  if (!review) return;
+  const dups = review.skipped.filter((s) => s.reason === 'duplicate');
+  const bad = review.skipped.filter((s) => s.reason !== 'duplicate');
+  showError('#review-error', '');
+
+  $('#review-dups').hidden = !dups.length;
+  $('#review-dup-count').textContent = `(${dups.length})`;
+  $('#review-dup-list').replaceChildren(...dups.map((s) => {
+    const it = review.items[s.index];
+    const where = s.inImport
+      ? 'This link is in the file more than once.'
+      : `Already saved as “${s.existingName}” in ${s.existingFolder || 'Uncategorized'}.`;
+    const row = h('li', { class: 'review-row' },
+      h('div', { class: 'review-what' },
+        h('strong', { text: it.name || hostOf(it.url) }),
+        h('span', { class: 'muted small review-url', text: it.url }),
+        h('span', { class: 'small', text: where })),
+      dupChoiceSelect(it));
+    row.dataset.index = s.index;
+    return row;
+  }));
+  const all = $('#review-dup-all');
+  all.replaceChildren(
+    h('option', { value: '', text: 'Set all to…' }),
+    h('option', { value: 'skip', text: "Don't import" }),
+    h('option', { value: 'file', text: 'Save copies where the file had them' }),
+    review.user ? null : h('optgroup', { label: 'Save copies in…' }, ...copyTargetOptions()));
+  all.value = '';
+
+  $('#review-bad').hidden = !bad.length;
+  $('#review-bad-count').textContent = `(${bad.length})`;
+  $('#review-bad-list').replaceChildren(...bad.map((s) => {
+    const it = review.items[s.index];
+    const name = h('input', { class: 'review-name', value: it.name || '', placeholder: 'Name', 'aria-label': 'Name' });
+    const url = h('input', { class: 'review-link', value: it.url || '', placeholder: 'https://…', spellcheck: 'false', 'aria-label': 'Link' });
+    const keep = h('div', { class: 'seg small-seg' },
+      h('button', { type: 'button', 'data-v': 'keep', text: 'Keep' }),
+      h('button', { type: 'button', 'data-v': 'remove', text: 'Remove', class: 'on' }));
+    const row = h('li', { class: 'review-row bad' },
+      h('div', { class: 'review-what' }, name, url,
+        h('span', { class: 'muted small review-msg', text: (s.message || 'not a web link').replace(/^./, (c) => c.toUpperCase()) })),
+      keep);
+    row.dataset.index = s.index;
+    keep.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]');
+      if (b) setKeep(row, b.dataset.v === 'keep');
+    });
+    // Fixing the link means "keep it".
+    url.addEventListener('input', () => setKeep(row, true));
+    return row;
+  }));
+
+  updateReviewCount();
+  reviewDlg.showModal();
+}
+
+function setKeep(row, on) {
+  row.classList.toggle('keep', on);
+  for (const b of row.querySelectorAll('.seg button')) b.classList.toggle('on', (b.dataset.v === 'keep') === on);
+  row.querySelector('.review-msg').classList.remove('error-text');
+  updateReviewCount();
+}
+
+$('#review-dup-all').addEventListener('change', (e) => {
+  const v = e.target.value;
+  if (!v) return;
+  for (const s of document.querySelectorAll('#review-dup-list .review-choice')) {
+    if ([...s.querySelectorAll('option')].some((o) => o.value === v)) s.value = v;
+  }
+  e.target.value = '';
+  updateReviewCount();
+});
+$('#review-bad-keep').addEventListener('click', () => document.querySelectorAll('#review-bad-list .review-row').forEach((r) => setKeep(r, true)));
+$('#review-bad-remove').addEventListener('click', () => document.querySelectorAll('#review-bad-list .review-row').forEach((r) => setKeep(r, false)));
+
+function updateReviewCount() {
+  const n = [...document.querySelectorAll('#review-dup-list .review-choice')].filter((s) => s.value !== 'skip').length
+    + document.querySelectorAll('#review-bad-list .review-row.keep').length;
+  const btn = $('#review-import');
+  btn.textContent = n ? `Import ${n}` : 'Import';
+  btn.disabled = !n;
+}
+
+$('#review-import').addEventListener('click', async () => {
+  const items = [];
+  let invalid = 0;
+  for (const row of document.querySelectorAll('#review-dup-list .review-row')) {
+    const v = row.querySelector('.review-choice').value;
+    if (v === 'skip') continue;
+    const it = { ...review.items[Number(row.dataset.index)] };
+    if (v === 'u') { it.path = []; delete it.folderId; }
+    else if (v !== 'file') { it.folderId = Number(v); }
+    items.push(it);
+  }
+  for (const row of document.querySelectorAll('#review-bad-list .review-row.keep')) {
+    const url = normalizeUrl(row.querySelector('.review-link').value);
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL(url).protocol); } catch { ok = false; }
+    if (!ok) {
+      invalid++;
+      const msg = row.querySelector('.review-msg');
+      msg.textContent = 'Still not a web link: it must start with http:// or https://';
+      msg.classList.add('error-text');
+      continue;
+    }
+    items.push({ ...review.items[Number(row.dataset.index)], url, name: row.querySelector('.review-name').value.trim() });
+  }
+  if (invalid) { showError('#review-error', `${invalid} link${invalid === 1 ? ' is' : 's are'} still not valid. Fix ${invalid === 1 ? 'it' : 'them'} or choose Remove.`); return; }
+  if (!items.length) return;
+  const btn = $('#review-import');
+  busy(btn, true, 'Importing…');
+  try {
+    const r = await api('POST', importPath(), { items, allowDuplicates: true });
+    reviewDlg.close();
+    const res = $('#io-result');
+    res.hidden = false;
+    res.replaceChildren(describeImport(r, 'From the review: added'));
+    review = null;
+    if (ioUser) { if ($('#admin').open) await loadUsers(); }
+    else { await loadBookmarks(); updatePreviewCount(); previewsAfterImport(r.ids); }
+  } catch (err) {
+    showError('#review-error', err.message);
+  } finally {
+    busy(btn, false);
+    updateReviewCount();
+  }
+});
+
 // Fetch thumbnails and favicons in the browser and upload them to the Pi.
-// Used for "Fetch missing previews" (import), "Refresh all previews"
+// Used after an import, for "Fetch missing previews", "Refresh all previews"
 // (Settings) and "Refresh previews" on a selection. 3 at a time keeps the Pi relaxed.
 //   keepManual: skip crumbs whose thumbnail the user picked by hand
 //   onlyMissing: only crumbs without a thumbnail
+//   retries: try the ones that got no thumbnail again, this many times
 let previewJob = false;
 
-async function refreshPreviews(list, { keepManual = true, onlyMissing = false, status = () => {} } = {}) {
+async function refreshPreviews(list, { keepManual = true, onlyMissing = false, retries = 0, status = () => {} } = {}) {
   if (previewJob) { status('Already fetching previews, one moment…'); return null; }
-  const todo = list.filter((b) => !b.deleted && (!onlyMissing || !b.thumb));
-  if (!todo.length) { status('Nothing to refresh.'); return { done: 0, found: 0 }; }
+  let todo = list.filter((b) => !b.deleted && (!onlyMissing || !b.thumb));
+  const total = todo.length;
+  if (!total) { status('Nothing to refresh.'); return { done: 0, found: 0, msg: 'Nothing to refresh.' }; }
   previewJob = true;
-  let done = 0, found = 0;
-  const step = async (b) => {
-    try {
-      const meta = await api('GET', '/api/meta?url=' + encodeURIComponent(b.url));
-      const skipThumb = keepManual && b.thumbManual;
-      const [thumb, ico] = await Promise.all([
-        skipThumb ? null : firstOk(meta.images, (x) => makeThumb(x)),
-        firstOk(meta.icons, makeIcon),
-      ]);
-      if (thumb) { await api('PUT', `/api/bookmarks/${b.id}/thumb`, thumb); found++; }
-      if (ico) await api('PUT', `/api/bookmarks/${b.id}/icon`, ico);
-    } catch { /* skip this one */ }
-    done++;
-    status(`Fetching previews… ${done} of ${todo.length}`);
-  };
-  const queue = [...todo];
-  const worker = async () => { while (queue.length) await step(queue.shift()); };
+  let found = 0;
+  const gotIcon = new Set();
   try {
-    await Promise.all([worker(), worker(), worker()]);
+    for (let attempt = 0; attempt <= retries && todo.length; attempt++) {
+      if (attempt) {
+        status(`Retrying ${todo.length} that got no picture (try ${attempt} of ${retries})…`);
+        await sleep([0, 2000, 5000, 10000][attempt] || 10000);
+      }
+      const failed = [];
+      let done = 0;
+      const step = async (b) => {
+        let ok = false;
+        try {
+          const meta = await api('GET', '/api/meta?url=' + encodeURIComponent(b.url));
+          const skipThumb = keepManual && b.thumbManual;
+          const [thumb, ico] = await Promise.all([
+            skipThumb ? null : firstOk(meta.images, (x) => makeThumb(x)),
+            gotIcon.has(b.id) ? null : firstOk(meta.icons, makeIcon),
+          ]);
+          if (thumb) { await api('PUT', `/api/bookmarks/${b.id}/thumb`, thumb); found++; }
+          if (ico) { await api('PUT', `/api/bookmarks/${b.id}/icon`, ico); gotIcon.add(b.id); }
+          ok = skipThumb || !!thumb;
+        } catch { ok = false; }
+        if (!ok) failed.push(b);
+        done++;
+        status(attempt
+          ? `Retrying… ${done} of ${todo.length} (try ${attempt} of ${retries})`
+          : `Fetching previews… ${done} of ${todo.length}`);
+      };
+      const queue = [...todo];
+      const worker = async () => { while (queue.length) await step(queue.shift()); };
+      await Promise.all([worker(), worker(), worker()]);
+      todo = failed;
+    }
   } finally {
     previewJob = false;
   }
   await loadBookmarks();
-  const msg = `Done: new thumbnails for ${found} of ${todo.length} crumb${todo.length === 1 ? '' : 's'}.`;
+  const msg = `Done: new thumbnails for ${found} of ${total} crumb${total === 1 ? '' : 's'}.`
+    + (todo.length ? ` ${todo.length} still ${todo.length === 1 ? 'has' : 'have'} none (the site has no picture or didn't answer).` : '');
   status(msg);
-  return { done, found, msg };
+  return { done: total, found, failed: todo.length, msg };
 }
 
 $('#io-fetch').addEventListener('click', async () => {
@@ -2196,7 +2481,8 @@ function importHTML(text) {
   if (!items.length) {
     for (const a of doc.querySelectorAll('a[href]')) items.push({ name: a.textContent.trim(), url: a.getAttribute('href'), description: '', path: [], created: 0 });
   }
-  return items.filter((i) => /^https?:/i.test(i.url));
+  // Links that aren't http(s) are kept: the server skips them and the user can review them.
+  return items.filter((i) => i.url);
 }
 
 function importJSON(data) {
@@ -2214,7 +2500,7 @@ function importJSON(data) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) { node.forEach((n) => walk(n, path)); return; }
     const url = node.url || node.uri || node.href || node.link;
-    if (typeof url === 'string' && /^https?:/i.test(url)) {
+    if (typeof url === 'string' && url.trim()) {
       const folder = node.folder || node.path || node.collection || node.category;
       items.push({
         name: node.name || node.title || '', url,
@@ -2280,7 +2566,8 @@ function importCSV(text) {
       if (url) items.push({ name: r.find((x) => x.trim() && x !== url) || '', url: url.trim(), description: '', path: [], created: 0 });
     }
   }
-  return items.filter((i) => /^https?:/i.test(i.url));
+  // Links that aren't http(s) are kept: the server skips them and the user can review them.
+  return items.filter((i) => i.url);
 }
 
 function importMarkdown(text) {

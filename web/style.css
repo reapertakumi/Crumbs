@@ -215,11 +215,19 @@ body:not(.side-open) .sidebar { transition: transform .3s var(--ease), visibilit
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 0; background: none; padding: 7px 0; text-align: left; cursor: pointer; text-decoration: none;
 }
-.ti .count { font-size: 12px; color: var(--muted); }
-.ti .acts { display: none; gap: 2px; }
+/* Every row has the same columns: [arrow 20px] [icon] [name, flexible] [count, fixed width],
+   so icons and counts line up no matter the row type. Hover buttons float over the count. */
+.tree { --depth: 0; }
+.ti .ico { flex: none; }
+.ti .count { flex: none; min-width: 28px; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ti .acts {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: none; gap: 2px; padding: 2px; border-radius: 8px; background: var(--hover);
+}
+.ti.active .acts { background: var(--fg); }
 .ti:hover .acts, .ti:focus-within .acts { display: flex; }
-.ti:hover .count, .ti:focus-within .count { display: none; }
-@media (hover: none) { .ti .acts { display: flex; } .ti .count { display: none; } }
+.ti:hover:has(.acts) .count, .ti:focus-within:has(.acts) .count { visibility: hidden; }
+@media (hover: none) { .ti .acts { display: flex; } .ti:has(.acts) .count { visibility: hidden; } }
 .ti .acts button {
   width: 26px; height: 26px; display: grid; place-items: center;
   border: 0; border-radius: 7px; background: none; cursor: pointer; color: inherit;
@@ -345,7 +353,8 @@ dialog.ask { width: min(400px, calc(100vw - 32px)); }
 .hint { margin-left: 4px; }
 .with-icon { position: relative; display: block; }
 .with-icon img { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); object-fit: contain; }
-.with-icon img:not([hidden]) + input { padding-left: 40px; }
+/* The ID keeps this stronger than the general input padding, so the name never runs under the favicon. */
+#fav-img:not([hidden]) + input { padding-left: 40px; }
 
 /* profile */
 .profile-card { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
@@ -654,3 +663,35 @@ body.dragging-crumbs .ti.folder, body.dragging-crumbs .tagrow { outline: 1px das
 .backup-ico { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #backup-list { margin-bottom: 12px; }
 @media (max-width: 640px) { .selbar { bottom: 12px; } .sel-count { display: none; } }
+
+/* ---------- v7: drag a box to select ---------- */
+.lasso {
+  position: fixed; z-index: 55; pointer-events: none;
+  border: 1.5px solid var(--fg); border-radius: 6px; background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+body.lassoing { user-select: none; cursor: crosshair; }
+body.lassoing .card { transition: none; }
+.main { min-height: calc(100vh - var(--top-h)); }
+
+/* ---------- v7: review skipped imports ---------- */
+#review-dlg { width: min(680px, calc(100vw - 32px)); }
+.review-sec + .review-sec { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.review-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.review-head h3 { margin: 0; }
+.review-head select { width: auto; max-width: 260px; padding-top: 7px; padding-bottom: 7px; font-size: 14px; }
+.review-bulk { display: flex; gap: 6px; }
+.review-list { list-style: none; margin: 10px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); max-height: 46vh; overflow-y: auto; }
+.review-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.review-row + .review-row { border-top: 1px solid var(--line); }
+.review-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.review-what strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.review-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-choice { width: 230px !important; flex: none; padding-top: 7px !important; padding-bottom: 7px !important; font-size: 13.5px !important; }
+.review-row.bad .review-what input { padding: 6px 10px; font-size: 13.5px; }
+.review-row.bad:not(.keep) .review-what input { color: var(--muted); }
+.small-seg button { height: 28px; padding: 0 12px; font-size: 13px; }
+.error-text { color: var(--fg) !important; font-weight: 600; }
+@media (max-width: 640px) {
+  .review-row { flex-direction: column; align-items: stretch; }
+  .review-choice { width: 100% !important; }
+}
