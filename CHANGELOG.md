@@ -9,7 +9,7 @@ for the Pi (arm64) and x86.
 
 ### Bookmarks
 - Visual grid with thumbnails, favicons, names, sites, descriptions and tags; four layouts (Grid, Gallery, List,
-  Compact) and three card sizes.
+  Compact) and a card scale slider (or Ctrl + scroll).
 - Paste a link and the title, description, favicon and preview picture are filled in; YouTube links get the video
   title, channel and thumbnail. Your browser makes the thumbnails, the Pi stores them.
 - Upload, paste or drop your own picture.
@@ -20,7 +20,8 @@ for the Pi (arm64) and x86.
   drag selected crumbs onto folders, tags or the Trash.
 - Trash with Undo; emptied after 30 days.
 - Optional duplicate rule: a link only once everywhere, or only once per folder.
-- Broken link checker and *Refresh all previews* (keeps thumbnails you set yourself).
+- Broken link checker and *Refresh all previews* (keeps thumbnails you set yourself); refresh the preview, title
+  or description of selected crumbs.
 
 ### Import & export
 - Browser bookmark files (.html), Crumbs / Chrome / Firefox .json, .csv (Pocket, Raindrop, …), Markdown and plain

@@ -97,7 +97,7 @@ function writeStore(key, val) {
 
 const prefs = Object.assign(
   {
-    theme: 'system', size: 'm', layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    theme: 'system', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
   },
   readStore('crumbs.prefs', {}));
@@ -106,11 +106,19 @@ const savePrefs = () => writeStore('crumbs.prefs', prefs);
 // The background photo is kept separately (it can be a few hundred KB).
 function readBgImage() { try { return localStorage.getItem('crumbs.bgimg') || ''; } catch { return ''; } }
 
+const SIZE_PRESETS = { s: 190, m: 250, l: 330 }; // card scale presets, smallest card width in px
+const SCALE_MIN = 150, SCALE_MAX = 450;
+// Settings saved before the slider existed only have Small/Medium/Large.
+if (!readStore('crumbs.prefs', {}).scale) prefs.scale = SIZE_PRESETS[prefs.size] || 250;
+
 function applyPrefs() {
   const root = document.documentElement;
   if (prefs.theme === 'light' || prefs.theme === 'dark') root.dataset.theme = prefs.theme;
   else delete root.dataset.theme;
-  root.dataset.size = prefs.size;
+  // Card scale: the smallest card width in px (Small/Medium/Large are 190/250/330).
+  const px = Number(prefs.scale) || SIZE_PRESETS[prefs.size] || 250;
+  root.style.setProperty('--card-min', px + 'px');
+  root.dataset.size = px < 210 ? 's' : px > 300 ? 'l' : 'm';
   root.dataset.layout = prefs.layout;
   const img = prefs.bg === 'image' ? readBgImage() : '';
   root.dataset.bg = prefs.bg === 'image' && !img ? 'plain' : prefs.bg;
@@ -878,7 +886,7 @@ function updateSelection() {
         btn('Move to…', bulkMove, 'folder'),
         btn('Tag…', bulkTag, 'tag'),
         S.view && String(S.view).startsWith('tag:') ? btn(`Remove #${S.view.slice(4)}`, () => bulk('removeTag', { tag: S.view.slice(4) })) : null,
-        btn('Refresh previews', bulkRefresh, 'restore'),
+        refreshMenu(),
         btn('Export', bulkExport, 'download'),
         btn('Trash', () => bulk('trash'), 'trash'),
       ]).filter(Boolean),
@@ -922,6 +930,50 @@ function bulkMove() {
 async function bulkTag() {
   const t = await ask({ title: `Tag ${S.sel.size} crumb${S.sel.size === 1 ? '' : 's'}`, text: 'Type a tag (new or existing).', ok: 'Add tag', input: { type: 'text', placeholder: 'e.g. recipes' } });
   if (t && t.trim()) bulk('addTag', { tag: t.trim() });
+}
+
+// "Refresh" in the selection bar opens a small menu: preview, title or description.
+function refreshMenu() {
+  const item = (label, fn) => h('button', { type: 'button', role: 'menuitem', text: label, onclick: fn });
+  return h('div', { class: 'dd sel-dd' },
+    h('button', { type: 'button', class: 'btn small', 'data-dd': '', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon('restore'), 'Refresh'),
+    h('div', { class: 'menu', role: 'menu' },
+      item('Refresh preview', bulkRefresh),
+      item('Refresh title', () => bulkRefreshText('name')),
+      item('Refresh description', () => bulkRefreshText('description'))));
+}
+
+// Fetch the page again and take its current title or description.
+// Crumbs where the page has none (or the same one) stay as they are.
+async function bulkRefreshText(field) {
+  const list = selectedCrumbs().filter((b) => !b.deleted);
+  clearSelection();
+  const label = field === 'name' ? 'titles' : 'descriptions';
+  let done = 0, changed = 0;
+  const queue = [...list];
+  const worker = async () => {
+    while (queue.length) {
+      const b = queue.shift();
+      try {
+        const m = await api('GET', '/api/meta?url=' + encodeURIComponent(b.url));
+        const v = ((field === 'name' ? m.title : m.description) || '').trim();
+        if (v && v !== b[field]) {
+          await api('PUT', `/api/bookmarks/${b.id}`, {
+            url: b.url,
+            name: field === 'name' ? v : b.name,
+            description: field === 'description' ? v : b.description,
+          });
+          changed++;
+        }
+      } catch { /* skip this one */ }
+      done++;
+      toast(`Refreshing ${label}… ${done} of ${list.length}`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]); // 3 at a time keeps the Pi relaxed
+  await loadBookmarks();
+  const same = list.length - changed;
+  toast(`Updated ${changed} ${changed === 1 ? label.slice(0, -1) : label}` + (same ? ` · ${same} already up to date or not found` : ''));
 }
 
 async function bulkRefresh() {
@@ -2697,7 +2749,7 @@ function openSettings() {
   $('#settings').showModal();
 }
 
-const SEGMENTS = [['#set-theme', 'theme'], ['#set-size', 'size'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
+const SEGMENTS =[['#set-theme', 'theme'], ['#set-size', 'size'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
 
 function renderSettings() {
   for (const [id, key] of SEGMENTS) {
@@ -2710,14 +2762,37 @@ function renderSettings() {
   $('#bg-bw').checked = !!prefs.bgBW;
   $('#bg-strength').value = String(prefs.bgStrength);
   $('#set-newtab').checked = prefs.newTab;
+  $('#set-scale').value = String(prefs.scale);
+  $('#scale-val').textContent = Math.round((prefs.scale / 250) * 100) + '%';
   renderDup();
 }
+
+// ---- card scale: a slider in Settings, or Ctrl + scroll over the crumbs ----
+
+function setScale(px) {
+  px = Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(px / 10) * 10));
+  if (px === prefs.scale) return;
+  prefs.scale = px;
+  // Light up Small / Medium / Large only when the scale sits exactly on one.
+  prefs.size = Object.keys(SIZE_PRESETS).find((k) => SIZE_PRESETS[k] === px) || 'custom';
+  savePrefs();
+  applyPrefs();
+  if ($('#settings').open) renderSettings();
+}
+
+$('#set-scale').addEventListener('input', (e) => setScale(Number(e.target.value)));
+$('#main').addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return; // plain scrolling stays scrolling
+  e.preventDefault();     // instead of zooming the whole page
+  setScale(prefs.scale + (e.deltaY < 0 ? 10 : -10));
+}, { passive: false });
 
 for (const [id, key] of SEGMENTS) {
   $(id).addEventListener('click', (e) => {
     const b = e.target.closest('button[data-v]');
     if (!b) return;
     if (key === 'bg' && b.dataset.v === 'image' && !readBgImage()) { $('#bg-file').click(); return; }
+    if (key === 'size') prefs.scale = SIZE_PRESETS[b.dataset.v];
     prefs[key] = b.dataset.v;
     savePrefs();
     applyPrefs();
@@ -2772,7 +2847,7 @@ $('#reset-settings').addEventListener('click', async () => {
   if (!ok) return;
   try { ['crumbs.prefs', 'crumbs.tree', 'crumbs.bgimg'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
   Object.assign(prefs, {
-    theme: 'system', size: 'm', layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    theme: 'system', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
   });
   treeState.open.clear();

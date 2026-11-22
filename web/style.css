@@ -645,7 +645,7 @@ html[data-layout="compact"] .card-check { top: 50%; transform: translateY(-50%);
   animation: pop .2s var(--ease);
 }
 .sel-count { font-weight: 700; font-size: 14px; white-space: nowrap; }
-.sel-actions { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.sel-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .sel-actions .btn { flex: none; }
 body.selecting .toast { bottom: 84px; }
 .drag-ghost { position: fixed; top: -100px; left: -100px; padding: 8px 14px; border-radius: 999px; background: var(--fg); color: var(--bg); font-weight: 700; font-size: 14px; }
@@ -730,3 +730,11 @@ dialog { overscroll-behavior: contain; }
 #lock-form h1 { text-align: center; margin: 0; font-size: 24px; }
 #lock-sub { text-align: center; margin: 6px 0 20px; }
 #lock-form .btn { width: 100%; height: 42px; margin-top: 4px; }
+
+/* ---------- v11: card scale slider ---------- */
+.scale-range { margin-top: 12px; }
+.scale-range #scale-val { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+.scale-range + .muted { margin: 4px 0 0; }
+
+/* ---------- v11: Refresh menu in the selection bar opens upwards ---------- */
+.selbar .sel-dd .menu { top: auto; bottom: calc(100% + 10px); transform-origin: bottom left; min-width: 200px; }
