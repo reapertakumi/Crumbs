@@ -774,10 +774,11 @@ function card(b) {
   }, icon('check'));
 
   const fc = folder && folder.color;
-  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : '') + (fc ? ' has-fc' : ''), style: fc ? `--fc:${fc}` : null, draggable: 'false' },
+  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : '') + (fc ? ' has-fc' : ''), draggable: 'false' },
     h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url, draggable: 'false' }, thumb, body),
     tags, check, actions);
   el.dataset.id = b.id;
+  if (fc) el.style.setProperty('--fc', fc);
   // While something is selected, clicking a card selects instead of opening it.
   el.querySelector('.card-link').addEventListener('click', (e) => {
     if (S.sel.size) { e.preventDefault(); toggleSelect(b.id, e.shiftKey); }
@@ -2900,11 +2901,16 @@ function renderAccent() {
   const custom = prefs.accent && !ACCENTS.includes(prefs.accent);
   const pick = h('input', { type: 'color', title: 'Your own color', 'aria-label': 'Your own accent color',
     class: custom ? 'on' : null, value: prefs.accent || '#3e63dd', onchange: (e) => setAccent(e.target.value) });
-  $('#set-accent').replaceChildren(...ACCENTS.map((c) => h('button', {
-    type: 'button', class: 'swatch' + (c ? '' : ' none') + (prefs.accent === c ? ' on' : ''),
-    style: c ? `background:${c}` : null, title: c || 'Theme default', 'aria-label': c ? `Accent ${c}` : 'Theme default accent',
-    'aria-pressed': String(prefs.accent === c), onclick: () => setAccent(c),
-  })), pick);
+  // Colors are set through the style object: the page's security policy blocks style="" text.
+  $('#set-accent').replaceChildren(...ACCENTS.map((c) => {
+    const b = h('button', {
+      type: 'button', class: 'swatch' + (c ? '' : ' none') + (prefs.accent === c ? ' on' : ''),
+      title: c || 'Theme default', 'aria-label': c ? `Accent ${c}` : 'Theme default accent',
+      'aria-pressed': String(prefs.accent === c), onclick: () => setAccent(c),
+    });
+    if (c) b.style.setProperty('--sw', c);
+    return b;
+  }), pick);
 }
 $('#set-ftint').addEventListener('change', (e) => { prefs.folderTint = e.target.checked; savePrefs(); applyPrefs(); });
 $('#main').addEventListener('wheel', (e) => {
