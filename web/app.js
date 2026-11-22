@@ -97,7 +97,7 @@ function writeStore(key, val) {
 
 const prefs = Object.assign(
   {
-    theme: 'system', palette: 'mono', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    theme: 'system', palette: 'mono', accent: '', accentFg: '', folderTint: true, size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
   },
   readStore('crumbs.prefs', {}));
@@ -138,6 +138,11 @@ function applyPrefs() {
   if (prefs.palette && prefs.palette !== 'mono') root.dataset.palette = prefs.palette;
   else delete root.dataset.palette;
   renderThemeBtn();
+  if (prefs.accent) {
+    root.style.setProperty('--accent', prefs.accent);
+    root.style.setProperty('--accent-fg', prefs.accentFg || '#fff');
+  } else { root.style.removeProperty('--accent'); root.style.removeProperty('--accent-fg'); }
+  root.toggleAttribute('data-ftint', prefs.folderTint !== false);
   // Card scale: the smallest card width in px (Small/Medium/Large are 190/250/330).
   const px = Number(prefs.scale) || SIZE_PRESETS[prefs.size] || 250;
   root.style.setProperty('--card-min', px + 'px');
@@ -768,7 +773,8 @@ function card(b) {
     onclick: (e) => toggleSelect(b.id, e.shiftKey),
   }, icon('check'));
 
-  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : ''), draggable: 'false' },
+  const fc = folder && folder.color;
+  const el = h('article', { class: 'card' + (b.deleted ? ' trashed' : '') + (fc ? ' has-fc' : ''), style: fc ? `--fc:${fc}` : null, draggable: 'false' },
     h('a', { class: 'card-link', href: b.url, target: prefs.newTab ? '_blank' : null, rel: 'noopener noreferrer', title: b.url, draggable: 'false' }, thumb, body),
     tags, check, actions);
   el.dataset.id = b.id;
@@ -2826,6 +2832,8 @@ function renderSettings() {
   $('#set-newtab').checked = prefs.newTab;
   $('#set-scale').value = String(prefs.scale);
   $('#set-palette').value = prefs.palette || 'mono';
+  $('#set-ftint').checked = prefs.folderTint !== false;
+  renderAccent();
   $('#scale-val').textContent = Math.round((prefs.scale / 250) * 100) + '%';
   renderDup();
 }
@@ -2849,26 +2857,56 @@ $('#theme-btn').addEventListener('click', (e) => {
   prefs.theme = THEME_ORDER[(THEME_ORDER.indexOf(t) + 1) % 3];
   savePrefs();
   const btn = e.currentTarget;
-  const swap = () => {
-    applyPrefs();
-    if ($('#settings').open) renderSettings();
-    btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin');
-  };
-  // The new look spreads out in a circle from the button, where the browser
-  // can do it and the user hasn't asked for less motion; otherwise colors fade.
+  const root = document.documentElement;
+  const spin = () => { btn.classList.remove('spin'); void btn.offsetWidth; btn.classList.add('spin'); };
+  const swap = () => { applyPrefs(); if ($('#settings').open) renderSettings(); };
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!document.startViewTransition || calm) { swap(); return; }
+  if (!document.startViewTransition || calm) {
+    // No circle: one quick color fade.
+    root.classList.add('theme-fade');
+    swap(); spin();
+    setTimeout(() => root.classList.remove('theme-fade'), 300);
+    return;
+  }
+  // The circle shows the finished new look. Every other transition is frozen
+  // while it grows, so the browser only moves one picture.
   const r = btn.getBoundingClientRect();
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
   const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-  document.startViewTransition(swap).ready.then(() => {
-    document.documentElement.animate(
+  root.classList.add('theme-switching');
+  const vt = document.startViewTransition(swap);
+  vt.ready.then(() => {
+    root.animate(
       { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] },
-      { duration: 550, easing: 'cubic-bezier(.2, .8, .2, 1)', pseudoElement: '::view-transition-new(root)' });
-  });
+      { duration: 650, easing: 'cubic-bezier(.22, .9, .25, 1)', pseudoElement: '::view-transition-new(root)' });
+  }).catch(() => {});
+  vt.finished.finally(() => { root.classList.remove('theme-switching'); spin(); });
 });
 DARK_MQ.addEventListener('change', () => { if (prefs.theme === 'system') applyPrefs(); });
 $('#set-palette').addEventListener('change', (e) => { prefs.palette = e.target.value; savePrefs(); applyPrefs(); });
+
+// ---- accent color: buttons, selection, toggles, focus rings ----
+const ACCENTS = ['', '#e5484d', '#f76b15', '#f5b400', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#a07553'];
+// Black or white text, whichever reads better on the accent.
+function textOn(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 160 ? '#000' : '#fff';
+}
+function setAccent(c) {
+  prefs.accent = c; prefs.accentFg = c ? textOn(c) : '';
+  savePrefs(); applyPrefs(); renderAccent();
+}
+function renderAccent() {
+  const custom = prefs.accent && !ACCENTS.includes(prefs.accent);
+  const pick = h('input', { type: 'color', title: 'Your own color', 'aria-label': 'Your own accent color',
+    class: custom ? 'on' : null, value: prefs.accent || '#3e63dd', onchange: (e) => setAccent(e.target.value) });
+  $('#set-accent').replaceChildren(...ACCENTS.map((c) => h('button', {
+    type: 'button', class: 'swatch' + (c ? '' : ' none') + (prefs.accent === c ? ' on' : ''),
+    style: c ? `background:${c}` : null, title: c || 'Theme default', 'aria-label': c ? `Accent ${c}` : 'Theme default accent',
+    'aria-pressed': String(prefs.accent === c), onclick: () => setAccent(c),
+  })), pick);
+}
+$('#set-ftint').addEventListener('change', (e) => { prefs.folderTint = e.target.checked; savePrefs(); applyPrefs(); });
 $('#main').addEventListener('wheel', (e) => {
   if (!e.ctrlKey) return; // plain scrolling stays scrolling
   e.preventDefault();     // instead of zooming the whole page
