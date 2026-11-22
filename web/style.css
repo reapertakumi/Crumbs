@@ -157,7 +157,7 @@ label > input, label > textarea, label > select, label > .with-icon { margin-top
   position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; min-width: 200px;
   padding: 6px; border: 1px solid var(--line); border-radius: 14px;
   background: var(--bg); box-shadow: var(--shadow);
-  opacity: 0; visibility: hidden; transform: translateY(-6px) scale(.98); transform-origin: top left;
+  opacity: 0; visibility: hidden; transform: translateY(-4px); transform-origin: top left;
   transition: opacity .16s, transform .16s var(--ease), visibility 0s linear .16s;
 }
 .menu.right { left: auto; right: 0; transform-origin: top right; }
@@ -703,3 +703,23 @@ body.lassoing .card { transition: none; }
 
 /* ---------- v8: reset section ---------- */
 .danger-row .btn { flex: none; }
+
+/* ---------- v9: menus slide without scaling (scaled text snapped into place at the end) ---------- */
+.menu { will-change: opacity, transform; backface-visibility: hidden; }
+
+/* ---------- v9: while a window (Settings, Profile, Admin, …) is open, only it scrolls ---------- */
+html:has(dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+dialog { overscroll-behavior: contain; }
+
+/* ---------- v9: profile picture menu ---------- */
+.avatar-dd { flex: none; }
+.avatar-btn { position: relative; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; display: block; }
+.avatar-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+.avatar-btn .avatar-badge {
+  position: absolute; right: -2px; bottom: -2px; width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--bg); color: var(--fg); border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.avatar-btn .avatar-badge svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.avatar-btn:hover .avatar { opacity: .85; }
+.avatar-lib { margin-top: 4px; }
+.avatar-lib .row { margin-bottom: 8px; }

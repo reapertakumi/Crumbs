@@ -205,7 +205,19 @@
         <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
       <div class="profile-card">
-        <span class="avatar xl" id="profile-avatar"></span>
+        <!-- Click the picture: a small menu offers the icon library or an upload. -->
+        <div class="dd avatar-dd" id="avatar-dd">
+          <button class="avatar-btn" type="button" data-dd aria-haspopup="menu" aria-expanded="false" title="Change picture" aria-label="Change profile picture">
+            <span class="avatar xl" id="profile-avatar"></span>
+            <span class="avatar-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></span>
+          </button>
+          <div class="menu" role="menu">
+            <button type="button" role="menuitem" id="avatar-pick-lib">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Choose from library</button>
+            <button type="button" role="menuitem" id="avatar-pick-upload">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 8.5l5-5 5 5M4.5 20h15"/></svg>Upload</button>
+          </div>
+        </div>
         <div>
           <div class="profile-name" id="profile-name"></div>
           <div class="muted small" id="profile-role"></div>
@@ -219,11 +231,14 @@
         <button class="btn" type="submit">Save</button>
       </form>
 
-      <h3>Profile picture</h3>
-      <div class="avatar-grid" id="avatar-grid"></div>
-      <div class="row wrap">
-        <label class="btn small file-btn">Upload a photo<input type="file" id="avatar-file" accept="image/*" hidden></label>
-        <span class="muted small">You can move and zoom it inside the circle.</span>
+      <input type="file" id="avatar-file" accept="image/*" hidden>
+      <div class="avatar-lib" id="avatar-lib" hidden>
+        <div class="row">
+          <h3>Choose a picture</h3>
+          <span class="spacer"></span>
+          <button class="btn small ghost" type="button" id="avatar-lib-close">Done</button>
+        </div>
+        <div class="avatar-grid" id="avatar-grid"></div>
       </div>
 
       <form id="pw-form" class="section">

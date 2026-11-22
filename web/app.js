@@ -425,7 +425,7 @@ function renderMe() {
        item('settings', 'gear', 'Settings'),
        h('hr'),
        item('signout', 'logout', 'Sign out')];
-  $('#me-menu').replaceChildren(head, h('hr'), ...items);
+  $('#me-menu').replaceChildren(head, h('hr'), ...items.filter(Boolean));
 }
 
 // ---------- sorting ----------
@@ -1773,9 +1773,18 @@ function openProfile() {
   $('#pw-form').reset();
   showError('#pw-error', '');
   field($('#name-form'), 'displayName').value = S.me.displayName || '';
+  $('#avatar-lib').hidden = true; // the icon library only shows after "Choose from library"
   renderProfile();
   $('#profile').showModal();
 }
+
+// Clicking the big profile picture opens a small menu: library or upload.
+$('#avatar-pick-lib').addEventListener('click', () => {
+  $('#avatar-lib').hidden = false;
+  $('#avatar-lib').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
+$('#avatar-pick-upload').addEventListener('click', () => $('#avatar-file').click());
+$('#avatar-lib-close').addEventListener('click', () => { $('#avatar-lib').hidden = true; });
 
 // Built-in choices: the first letter, then every icon. A current photo comes first.
 function avatarChoices(u) {
@@ -2111,11 +2120,12 @@ function openReview() {
     return row;
   }));
   const all = $('#review-dup-all');
-  all.replaceChildren(
+  all.replaceChildren(...[
     h('option', { value: '', text: 'Set all to…' }),
     h('option', { value: 'skip', text: "Don't import" }),
     h('option', { value: 'file', text: 'Save copies where the file had them' }),
-    review.user ? null : h('optgroup', { label: 'Save copies in…' }, ...copyTargetOptions()));
+    review.user ? null : h('optgroup', { label: 'Save copies in…' }, ...copyTargetOptions()),
+  ].filter(Boolean));
   all.value = '';
 
   $('#review-bad').hidden = !bad.length;
@@ -2881,7 +2891,8 @@ function openUserMenu(u, btn) {
   if (wasOpen) return;
   const me = u.id === S.me.id;
   const item = (label, fn) => h('button', { type: 'button', role: 'menuitem', text: label, onclick: fn });
-  $('#user-menu').replaceChildren(
+  // (replaceChildren would print a null as the text "null", so drop them first)
+  $('#user-menu').replaceChildren(...[
     h('div', { class: 'menu-cap', text: nameOf(u) }),
     item('Change name', () => editUserName(u)),
     item('Change picture', () => pickUserPicture(u)),
@@ -2891,7 +2902,8 @@ function openUserMenu(u, btn) {
     me ? null : h('hr'),
     me ? null : item(u.isAdmin ? 'Remove admin rights' : 'Make admin', () => toggleAdmin(u)),
     me ? null : item(u.blocked ? 'Unblock access' : 'Block access', () => toggleBlock(u)),
-    me ? null : item('Delete user', () => deleteUser(u)));
+    me ? null : item('Delete user', () => deleteUser(u)),
+  ].filter(Boolean));
   const r = btn.getBoundingClientRect();
   const up = r.bottom + 340 > innerHeight;
   dd.classList.toggle('up', up);
