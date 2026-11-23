@@ -894,3 +894,11 @@ body.side-resizing .main, body.side-resizing .sidebar { transition: none !import
 /* Smart folders sit right under Uncategorized. */
 .smartrow .ico { opacity: .9; }
 #smart-hint { margin: -6px 0 14px; }
+
+/* Storage bar in the profile menu */
+.menu-head { flex-wrap: wrap; }
+.me-storage { flex-basis: 100%; margin-top: 4px; }
+.me-storage .bar { display: block; height: 5px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.me-storage .bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .4s var(--ease); }
+.me-storage .bar.full i { background: #e5484d; }
+.me-storage-nums { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }

@@ -512,6 +512,21 @@ function runAction(name) {
   }
 }
 
+// Storage bar under the name: used on the left, the limit on the right.
+function meStorage() {
+  const st = S.storage;
+  if (!st || S.guest) return null;
+  const bar = h('span', { class: 'bar' }, h('i'));
+  const pct = st.limit > 0 ? Math.min(100, (st.used / st.limit) * 100) : 0;
+  bar.firstChild.style.setProperty('width', pct.toFixed(1) + '%');
+  if (pct >= 90) bar.classList.add('full');
+  return h('div', { class: 'me-storage', title: st.limit > 0 ? `${pct.toFixed(0)}% of your space used` : 'No storage limit' },
+    st.limit > 0 ? bar : null,
+    h('div', { class: 'me-storage-nums' },
+      h('span', { text: formatBytes(st.used) + (st.limit > 0 ? '' : ' used') }),
+      h('span', { text: st.limit > 0 ? formatBytes(st.limit) : 'no limit' })));
+}
+
 function renderMe() {
   const guestUser = { username: 'Guest', avatar: '' };
   const u = S.guest ? guestUser : S.me;
@@ -520,7 +535,8 @@ function renderMe() {
   const item = (act, ic, label) => h('button', { type: 'button', role: 'menuitem', 'data-act': act }, icon(ic), label);
   const head = h('div', { class: 'menu-head' }, avatarEl(u, 'sm'),
     h('div', {}, h('strong', { text: nameOf(u) }),
-      h('span', { class: 'muted small', text: S.guest ? `Using ${nameOf(S.me)}'s crumbs` : `@${S.me.username}${S.me.isAdmin ? ' · Admin' : ''}` })));
+      h('span', { class: 'muted small', text: S.guest ? `Using ${nameOf(S.me)}'s crumbs` : `@${S.me.username}${S.me.isAdmin ? ' · Admin' : ''}` })),
+    meStorage());
   const items = S.guest
     ? [item('settings', 'gear', 'Settings'), h('hr'), item('signin', 'logout', 'Sign in')]
     : [S.me.isAdmin ? item('admin', 'shield', 'Admin') : null,
@@ -740,6 +756,8 @@ async function loadBookmarks() {
   S.savedTags = data.tags || [];
   S.tagColors = data.tagColors || {};
   S.smart = data.smart || [];
+  S.storage = data.storage || null;
+  if (S.me) renderMe();
   if (typeof S.view === 'string' && S.view.startsWith('smart:') && !smartById(S.view)) S.view = null;
   indexFolders();
   if (S.view > 0 && !S.fmap.has(S.view)) S.view = null;
