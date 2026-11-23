@@ -2078,8 +2078,33 @@ function renderFolderLook() {
   $('#folder-icons').replaceChildren(...Object.keys(FOLDER_ICONS).map((k) => h('button', {
     type: 'button', class: 'icon-opt' + ((fd.icon || 'folder') === k ? ' on' : ''),
     title: k, 'aria-label': `Icon ${k}`, 'aria-pressed': String((fd.icon || 'folder') === k),
-    onclick: () => { fd.icon = k === 'folder' ? '' : k; renderFolderLook(); },
+    onclick: () => { fd.icon = k === 'folder' ? '' : k; showIconPop(false); renderFolderLook(); },
   }, folderIcon({ icon: k, color: fd.color }, ''))));
+  $('#folder-icon-btn').replaceChildren(folderIcon({ icon: fd.icon || 'folder', color: fd.color }, ''));
+}
+
+// The icon next to the name opens a small menu with every icon.
+function showIconPop(open) {
+  $('#folder-icon-pop').hidden = !open;
+  $('#folder-icon-btn').setAttribute('aria-expanded', String(open));
+}
+$('#folder-icon-btn').addEventListener('click', () => showIconPop($('#folder-icon-pop').hidden));
+$('#folder-dlg').addEventListener('click', (e) => {
+  if (!$('#folder-icon-pop').hidden && !e.target.closest('#folder-icon-pop, #folder-icon-btn')) showIconPop(false);
+});
+$('#folder-dlg').addEventListener('close', () => showIconPop(false));
+
+// Clicking the dimmed area outside the folder or tag window closes it.
+for (const id of ['#folder-dlg', '#tag-dlg']) {
+  const dlg = $(id);
+  let downOutside = false;
+  const outside = (e) => {
+    const r = dlg.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  // Both press and release must be outside, so selecting text that ends outside doesn't close it.
+  dlg.addEventListener('pointerdown', (e) => { downOutside = e.target === dlg && outside(e); });
+  dlg.addEventListener('click', (e) => { if (downOutside && e.target === dlg && outside(e)) dlg.close(); downOutside = false; });
 }
 
 fform.addEventListener('submit', async (e) => {

@@ -253,16 +253,17 @@
         <h2 id="folder-title">Add folder</h2>
         <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
-      <label>Name
-        <input name="name" maxlength="100" autocomplete="off" required>
-      </label>
+      <div class="field-label" id="folder-name-lbl">Name</div>
+      <div class="name-row">
+        <button type="button" class="icon-current" id="folder-icon-btn" aria-label="Choose an icon" aria-expanded="false" aria-controls="folder-icon-pop" title="Choose an icon"></button>
+        <input name="name" maxlength="100" autocomplete="off" required aria-labelledby="folder-name-lbl">
+        <div class="icon-pop" id="folder-icon-pop" hidden><div class="icon-pick" id="folder-icons"></div></div>
+      </div>
       <label>Inside
         <select name="parent" id="folder-parent"></select>
       </label>
       <div class="setting-label">Color</div>
       <div class="swatches" id="folder-colors"></div>
-      <div class="setting-label">Icon</div>
-      <div class="icon-pick" id="folder-icons"></div>
       <p class="error" id="folder-error" hidden></p>
       <div class="row">
         <button type="button" class="btn" id="folder-delete" hidden>Delete</button>
