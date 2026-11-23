@@ -39,6 +39,8 @@ const UI_ICONS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',
   restore: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
   alert: '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/>',
   tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
   download: '<path d="M12 4v11M7 10.5l5 5 5-5M4.5 20h15"/>',
@@ -844,6 +846,7 @@ function card(b) {
     if (S.sel.size) { e.preventDefault(); toggleSelect(b.id, e.shiftKey); }
   });
   bookmarkDrag(el, b);
+  el.addEventListener('contextmenu', (e) => cardMenu(e, b));
   return el;
 }
 
@@ -1036,6 +1039,50 @@ async function bulk(action, extra = {}, ids = [...S.sel]) {
       action === 'trash' ? { label: 'Undo', fn: () => bulk('restore', {}, ids) } : null);
   } catch (err) { toast(err.message); }
 }
+
+// ---- right-click menu on a card ----
+// Acts on the whole selection when the card is part of it, otherwise on that card alone.
+function cardMenu(e, b) {
+  if (e.shiftKey) return; // Shift + right-click keeps the browser's own menu
+  e.preventDefault();
+  closeMenus();
+  document.querySelector('.ctx-dd')?.remove();
+  const many = S.sel.has(b.id) && S.sel.size > 1;
+  const only = (fn) => () => {
+    if (!S.sel.has(b.id)) { clearSelection(); toggleSelect(b.id); }
+    fn();
+  };
+  const item = (ic, label, fn, cls = '') => h('button', { type: 'button', role: 'menuitem', class: cls, onclick: () => { menu.remove(); fn(); } }, icon(ic), label);
+  const sep = () => h('hr');
+  const n = many ? ` ${S.sel.size} crumbs` : '';
+  const items = b.deleted ? [
+    item('restore', 'Restore' + n, many ? () => bulk('restore') : () => restoreBookmark(b)),
+    item('trash', 'Delete forever' + n, many ? bulkDeleteForever : () => deleteForever(b), 'danger'),
+  ] : [
+    many ? null : item('link', 'Open in new tab', () => window.open(b.url, '_blank', 'noopener')),
+    many ? null : item('copy', 'Copy link', async () => {
+      try { await navigator.clipboard.writeText(b.url); toast('Link copied'); } catch { toast("Couldn't copy the link"); }
+    }),
+    many ? null : sep(),
+    many ? null : item('edit', 'Edit', () => openEditor(b)),
+    item('folder', 'Move to…' + (many ? n : ''), only(bulkMove)),
+    item('tag', 'Add tag…', only(bulkTag)),
+    item('restore', 'Refresh preview', only(bulkRefresh)),
+    item('restore', 'Refresh title', only(() => bulkRefreshText('name'))),
+    many ? null : item('check', S.sel.has(b.id) ? 'Unselect' : 'Select', () => toggleSelect(b.id)),
+    sep(),
+    item('trash', 'Delete' + n, many ? () => bulk('trash') : () => trashBookmark(b), 'danger'),
+  ];
+  const menu = h('div', { class: 'dd ctx-dd open' }, h('div', { class: 'menu', role: 'menu' }, ...items.filter(Boolean)));
+  document.body.append(menu);
+  // Keep it on screen.
+  const r = menu.firstChild.getBoundingClientRect();
+  menu.style.left = Math.min(e.clientX, innerWidth - r.width - 8) + 'px';
+  menu.style.top = Math.min(e.clientY, innerHeight - r.height - 8) + 'px';
+  menu.firstChild.querySelector('button')?.focus({ preventScroll: true });
+}
+addEventListener('scroll', () => document.querySelector('.ctx-dd')?.remove(), { passive: true });
+addEventListener('resize', () => document.querySelector('.ctx-dd')?.remove());
 
 async function bulkDeleteForever() {
   const n = S.sel.size;

@@ -884,3 +884,8 @@ body.side-resizing .main, body.side-resizing .sidebar { transition: none !import
 .icon-current svg { width: 20px; height: 20px; }
 .icon-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: min(340px, 100%); padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); box-shadow: var(--shadow); }
 .icon-pop .icon-pick { margin: 0; }
+
+/* Right-click menu on a card */
+.ctx-dd { position: fixed; z-index: 60; }
+.ctx-dd .menu { position: static; min-width: 210px; }
+.menu button.danger { color: #e5484d; }
