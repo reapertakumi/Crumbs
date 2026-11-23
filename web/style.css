@@ -890,3 +890,7 @@ body.side-resizing .main, body.side-resizing .sidebar { transition: none !import
 .ctx-dd { position: fixed; z-index: 60; }
 .ctx-dd .menu { position: static; min-width: 210px; }
 .menu button.danger { color: #e5484d; }
+
+/* Smart folders sit right under Uncategorized. */
+.smartrow .ico { opacity: .9; }
+#smart-hint { margin: -6px 0 14px; }

@@ -189,10 +189,10 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 		return
 	}
 	// Tags made with "Add tag" are listed even while no crumb has them.
-	var saved, colorsJSON string
-	a.db.QueryRow(`SELECT saved_tags, tag_colors FROM users WHERE id = ?`, who.ID).Scan(&saved, &colorsJSON)
+	var saved, colorsJSON, smartJSON string
+	a.db.QueryRow(`SELECT saved_tags, tag_colors, smart_folders FROM users WHERE id = ?`, who.ID).Scan(&saved, &colorsJSON, &smartJSON)
 	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "trash": trash, "folders": folders, "trashDays": trashDays,
-		"tags": splitTags(saved), "tagColors": tagColorMap(colorsJSON)})
+		"tags": splitTags(saved), "tagColors": tagColorMap(colorsJSON), "smart": smartList(smartJSON)})
 }
 
 func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *Who) {

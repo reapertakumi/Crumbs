@@ -39,6 +39,7 @@ const UI_ICONS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',
   restore: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 3.5v5h5"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  smart: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M10.5 7.5v6M7.5 10.5h6"/>',
   link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
   alert: '<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/>',
@@ -501,6 +502,7 @@ function runAction(name) {
     case 'add-bookmark': return openEditor();
     case 'add-folder': return openFolderDialog(null, S.view > 0 ? S.view : null);
     case 'add-tag': return addTag();
+    case 'add-smart': return openSmartDialog(null);
     case 'admin': return openAdmin();
     case 'profile': return openProfile();
     case 'settings': return openSettings();
@@ -737,6 +739,8 @@ async function loadBookmarks() {
   S.folders = data.folders || [];
   S.savedTags = data.tags || [];
   S.tagColors = data.tagColors || {};
+  S.smart = data.smart || [];
+  if (typeof S.view === 'string' && S.view.startsWith('smart:') && !smartById(S.view)) S.view = null;
   indexFolders();
   if (S.view > 0 && !S.fmap.has(S.view)) S.view = null;
   buildCards();
@@ -858,6 +862,7 @@ function inView(b) {
   if (S.view === 0) return !b.folderId || !S.fmap.has(b.folderId);
   if (S.view === 'broken') return b.link === 2;
   if (typeof S.view === 'string' && S.view.startsWith('tag:')) return (b.tags || []).includes(S.view.slice(4));
+  if (typeof S.view === 'string' && S.view.startsWith('smart:')) { const f = smartById(S.view); return !!f && matchesSearch(b, smartTerms(f.query)); }
   return viewSet.has(b.folderId);
 }
 
@@ -867,6 +872,7 @@ function viewTitle() {
   if (S.view === 'trash') return 'Trash';
   if (S.view === 'broken') return 'Broken links';
   if (typeof S.view === 'string' && S.view.startsWith('tag:')) return '#' + S.view.slice(4);
+  if (typeof S.view === 'string' && S.view.startsWith('smart:')) return smartById(S.view)?.name || 'Smart folder';
   return folderPath(S.view);
 }
 
@@ -1029,6 +1035,9 @@ $('#sel-clear').addEventListener('click', clearSelection);
 const selectedCrumbs = () => [...S.list, ...S.trash].filter((b) => S.sel.has(b.id));
 
 async function bulk(action, extra = {}, ids = [...S.sel]) {
+  // Remember where moved crumbs were, so Undo can put each one back.
+  const before = action === 'move'
+    ? new Map(ids.map((id) => [id, (S.list.find((b) => b.id === id) || {}).folderId || null])) : null;
   try {
     const r = await api('POST', '/api/bookmarks/bulk', { ids, action, ...extra });
     clearSelection();
@@ -1036,7 +1045,8 @@ async function bulk(action, extra = {}, ids = [...S.sel]) {
     const n = r.changed;
     const what = { move: 'Moved', trash: 'Moved to the trash:', restore: 'Restored', delete: 'Deleted', addTag: 'Tagged', removeTag: 'Untagged' }[action];
     toast(`${what} ${n} crumb${n === 1 ? '' : 's'}` + (r.skipped ? ` (${r.skipped} skipped: already in that folder)` : ''),
-      action === 'trash' ? { label: 'Undo', fn: () => bulk('restore', {}, ids) } : null);
+      action === 'trash' ? { label: 'Undo', fn: () => bulk('restore', {}, ids) }
+        : action === 'move' && n ? { label: 'Undo', fn: () => undoMove(before) } : null);
   } catch (err) { toast(err.message); }
 }
 
@@ -1083,6 +1093,93 @@ function cardMenu(e, b) {
 }
 addEventListener('scroll', () => document.querySelector('.ctx-dd')?.remove(), { passive: true });
 addEventListener('resize', () => document.querySelector('.ctx-dd')?.remove());
+
+async function undoMove(before) {
+  const groups = new Map();
+  for (const [id, f] of before) {
+    if (!groups.has(f)) groups.set(f, []);
+    groups.get(f).push(id);
+  }
+  try {
+    for (const [f, ids] of groups) await api('POST', '/api/bookmarks/bulk', { ids, action: 'move', folderId: f });
+    await loadBookmarks();
+    toast('Move undone');
+  } catch (err) { toast(err.message); }
+}
+
+// ---- smart folders: saved searches in the sidebar ----
+const smartById = (v) => (S.smart || []).find((f) => 'smart:' + f.id === v);
+const smartTerms = (q) => q.toLowerCase().split(/\s+/).filter(Boolean);
+function smartRows() {
+  return (S.smart || []).map((f) => {
+    const n = S.list.filter((b) => matchesSearch(b, smartTerms(f.query))).length;
+    const ic = icon('smart', 'ico');
+    if (f.color) ic.style.setProperty('color', f.color);
+    return h('div', { class: 'ti smartrow' + (S.view === 'smart:' + f.id ? ' active' : ''), title: f.query },
+      h('span', { class: 'twisty none' }), ic,
+      h('button', { type: 'button', class: 'label', text: f.name, onclick: () => selectView('smart:' + f.id) }),
+      h('span', { class: 'count', text: String(n) }),
+      h('span', { class: 'acts' },
+        actBtn('edit', 'Edit smart folder', () => openSmartDialog(f)),
+        actBtn('trash', 'Delete smart folder', () => deleteSmart(f))));
+  });
+}
+async function saveSmart(list) {
+  const r = await api('PUT', '/api/smart', { folders: list });
+  S.smart = r.folders || list;
+  filterGrid();
+  renderTree();
+}
+let sd = null;
+function openSmartDialog(f) {
+  sd = { f, color: f ? f.color || '' : '' };
+  const form = $('#smart-form');
+  $('#smart-title').textContent = f ? 'Edit smart folder' : 'Add smart folder';
+  form.elements.name.value = f ? f.name : '';
+  form.elements.query.value = f ? f.query : (S.q || '').trim();
+  $('#smart-error').hidden = true;
+  $('#smart-delete').hidden = !f;
+  renderSmartColors();
+  smartHint();
+  $('#smart-dlg').showModal();
+  form.elements.name.focus();
+}
+function renderSmartColors() {
+  $('#smart-colors').replaceChildren(...colorRow(sd.color, (c) => { sd.color = c; renderSmartColors(); }));
+}
+function smartHint() {
+  const q = $('#smart-form').elements.query.value.trim();
+  const n = q ? S.list.filter((b) => matchesSearch(b, smartTerms(q))).length : 0;
+  $('#smart-hint').textContent = q ? `${n} crumb${n === 1 ? '' : 's'} match right now. New crumbs that match show up by themselves.`
+    : 'Words match the name, link, description and folder; #tag matches a tag. All of them must match.';
+}
+$('#smart-form').elements.query.addEventListener('input', smartHint);
+$('#smart-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = $('#smart-form');
+  const name = form.elements.name.value.trim(), query = form.elements.query.value.trim();
+  const err = $('#smart-error');
+  if (!name || !query) { err.textContent = 'Give it a name and a search.'; err.hidden = false; return; }
+  const list = (S.smart || []).slice();
+  let id;
+  if (sd.f) { id = sd.f.id; const i = list.findIndex((x) => x.id === id); list[i] = { ...list[i], name, query, color: sd.color }; }
+  else { id = Math.max(0, ...list.map((x) => x.id)) + 1; list.push({ id, name, query, color: sd.color }); }
+  try {
+    await saveSmart(list);
+    $('#smart-dlg').close();
+    selectView('smart:' + id);
+    toast(sd.f ? 'Smart folder saved' : `Smart folder “${name}” added`);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+});
+$('#smart-delete').addEventListener('click', () => { const f = sd.f; $('#smart-dlg').close(); deleteSmart(f); });
+async function deleteSmart(f) {
+  const before = (S.smart || []).slice();
+  try {
+    await saveSmart(before.filter((x) => x.id !== f.id));
+    if (S.view === 'smart:' + f.id) selectView(null);
+    toast(`Deleted “${f.name}”`, { label: 'Undo', fn: () => saveSmart(before).catch((e) => toast(e.message)) });
+  } catch (err) { toast(err.message); }
+}
 
 async function bulkDeleteForever() {
   const n = S.sel.size;
@@ -1403,6 +1500,7 @@ function renderTree() {
   const parts = [
     simpleRow(null, 'all', 'All crumbs', S.list.length),
     uncategorizedNode(tabsIn.get(0) || []),
+    ...smartRows(),
     trashRow,
     broken ? simpleRow('broken', 'alert', 'Broken links', broken) : null,
     h('div', { class: 'tree-sep' }),
@@ -2142,7 +2240,7 @@ $('#folder-dlg').addEventListener('click', (e) => {
 $('#folder-dlg').addEventListener('close', () => showIconPop(false));
 
 // Clicking the dimmed area outside the folder or tag window closes it.
-for (const id of ['#folder-dlg', '#tag-dlg']) {
+for (const id of ['#folder-dlg', '#tag-dlg', '#smart-dlg']) {
   const dlg = $(id);
   let downOutside = false;
   const outside = (e) => {

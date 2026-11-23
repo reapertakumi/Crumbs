@@ -150,6 +150,53 @@ func (a *App) handleBulk(w http.ResponseWriter, r *http.Request, who *Who) {
 	writeJSON(w, http.StatusOK, map[string]int{"changed": changed, "skipped": skipped})
 }
 
+// SmartFolder is a saved search shown in the sidebar.
+type SmartFolder struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Query string `json:"query"`
+	Color string `json:"color"`
+}
+
+func smartList(s string) []SmartFolder {
+	list := []SmartFolder{}
+	if s != "" {
+		json.Unmarshal([]byte(s), &list)
+	}
+	return list
+}
+
+// handleSmartFolders replaces the user's whole list of smart folders.
+func (a *App) handleSmartFolders(w http.ResponseWriter, r *http.Request, who *Who) {
+	var in struct {
+		Folders []SmartFolder `json:"folders"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		jsonErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	if len(in.Folders) > 200 {
+		jsonErr(w, http.StatusBadRequest, "too many smart folders")
+		return
+	}
+	out := []SmartFolder{}
+	for _, f := range in.Folders {
+		f.Name = clip(oneLine(strings.TrimSpace(f.Name)), 100)
+		f.Query = clip(oneLine(strings.TrimSpace(f.Query)), 300)
+		if f.Name == "" || f.Query == "" || f.ID <= 0 || !okColor(f.Color) {
+			jsonErr(w, http.StatusBadRequest, "every smart folder needs a name and a search")
+			return
+		}
+		out = append(out, f)
+	}
+	data, _ := json.Marshal(out)
+	if _, err := a.db.Exec(`UPDATE users SET smart_folders = ? WHERE id = ?`, string(data), who.ID); err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folders": out})
+}
+
 // tagColorMap reads a user's tag colors ({"tag":"#rrggbb"}); bad data gives an empty map.
 func tagColorMap(s string) map[string]string {
 	m := map[string]string{}
@@ -343,7 +390,7 @@ func (a *App) handleWipe(w http.ResponseWriter, r *http.Request, who *Who) {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	tx.Exec(`UPDATE users SET saved_tags = '', tag_colors = '' WHERE id = ?`, who.ID)
+	tx.Exec(`UPDATE users SET saved_tags = '', tag_colors = '', smart_folders = '' WHERE id = ?`, who.ID)
 	res, err := tx.Exec(`DELETE FROM folders WHERE user_id = ?`, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
