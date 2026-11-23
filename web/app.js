@@ -1208,6 +1208,23 @@ function setSidebar(open, remember = true) {
 $('#menu-btn').addEventListener('click', () => setSidebar(!document.body.classList.contains('side-open')));
 $('#scrim').addEventListener('click', () => setSidebar(false));
 
+// While the sidebar is closed, resting the mouse on the left edge slides it
+// out over the crumbs for a moment; it hides again when the mouse leaves.
+let peekTimer = 0;
+const peek = (on) => {
+  clearTimeout(peekTimer);
+  if (on && (document.body.classList.contains('side-open') || document.querySelector('dialog[open]'))) return;
+  if (on) peekTimer = setTimeout(() => document.body.classList.add('side-peek'), 120);
+  else peekTimer = setTimeout(() => document.body.classList.remove('side-peek'), 250);
+};
+$('#side-edge').addEventListener('mouseenter', () => peek(true));
+$('#side-edge').addEventListener('mouseleave', () => { if (!document.body.classList.contains('side-peek')) clearTimeout(peekTimer); });
+$('#sidebar').addEventListener('mouseenter', () => { if (document.body.classList.contains('side-peek')) clearTimeout(peekTimer); });
+$('#sidebar').addEventListener('mouseleave', () => {
+  if (document.body.classList.contains('side-peek') && !$('#sidebar').querySelector('.dd.open')) peek(false);
+});
+$('#menu-btn').addEventListener('click', () => { clearTimeout(peekTimer); document.body.classList.remove('side-peek'); });
+
 const actBtn = (ic, label, fn) => h('button', { type: 'button', title: label, 'aria-label': label, onclick: fn }, icon(ic));
 
 function twisty(hasKids, collapsed, onToggle) {

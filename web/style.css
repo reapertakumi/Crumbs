@@ -849,3 +849,10 @@ html[data-hide~="desc"] .card .card-desc { display: none; }
 html[data-hide~="created"] .card .d-created { display: none; }
 html[data-hide~="updated"] .card .d-updated { display: none; }
 html[data-hide~="created"][data-hide~="updated"] .card .card-dates { display: none; }
+
+/* Peek: with the sidebar closed, the left edge brings it out over the crumbs. */
+.side-edge { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  body:not(.side-open) .side-edge { display: block; position: fixed; top: var(--top-h); bottom: 0; left: 0; width: 10px; z-index: 19; }
+  body.side-peek:not(.side-open) .sidebar { transform: none; visibility: visible; box-shadow: var(--shadow); z-index: 25; }
+}
