@@ -655,6 +655,42 @@ function folderOptions(select, { selected = null, exclude = new Set(), rootLabel
 // ---------- folder looks: color + icon ----------
 
 const FOLDER_COLORS = ['', '#8e8e93', '#e5484d', '#f76b15', '#f5b400', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#a07553'];
+
+// ---- color rows (folders, tags, accent): no color, a picker, then recent colors ----
+const RECENT_MAX = 9;
+const RECENT_START = ['#e5484d', '#f76b15', '#f5b400', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#a07553'];
+function recentColors() {
+  const list = readStore('crumbs.recentColors', null);
+  return Array.isArray(list) && list.length ? list.slice(0, RECENT_MAX) : RECENT_START.slice();
+}
+// A color picked with the picker goes first; the oldest drops off the end.
+function rememberColor(c) {
+  if (!c) return;
+  c = c.toLowerCase();
+  const list = recentColors();
+  if (list.includes(c)) return;
+  writeStore('crumbs.recentColors', [c, ...list].slice(0, RECENT_MAX));
+}
+// Builds the swatches for one row. onPick(color) gets '' for "no color".
+function colorRow(current, onPick, noneLabel = 'No color') {
+  current = (current || '').toLowerCase();
+  const swatch = (c) => {
+    const b = h('button', {
+      type: 'button', class: 'swatch' + (c ? '' : ' none') + (current === c ? ' on' : ''),
+      title: c || noneLabel, 'aria-label': c ? `Color ${c}` : noneLabel, 'aria-pressed': String(current === c),
+      onclick: () => onPick(c),
+    });
+    if (c) b.style.setProperty('--sw', c); // style="" text is blocked by the page's security policy
+    return b;
+  };
+  const recent = recentColors();
+  const custom = current && !recent.includes(current);
+  const input = h('input', { type: 'color', 'aria-label': 'Pick any color', value: current || '#3e63dd',
+    onchange: (e) => { rememberColor(e.target.value); onPick(e.target.value.toLowerCase()); } });
+  const picker = h('label', { class: 'swatch picker' + (custom ? ' on' : ''), title: 'Pick any color' }, input);
+  if (custom) picker.style.setProperty('--sw', current);
+  return [swatch(''), picker, ...recent.map(swatch)];
+}
 const FOLDER_ICONS = {
   folder: UI_ICONS.folder,
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
@@ -1385,15 +1421,7 @@ function openTagDialog(tag) {
   $('#tag-form').elements.name.focus();
 }
 function renderTagColors() {
-  $('#tag-colors').replaceChildren(...FOLDER_COLORS.map((c) => {
-    const b = h('button', {
-      type: 'button', class: 'swatch' + (c ? '' : ' none') + (td.color === c ? ' on' : ''),
-      title: c || 'No color', 'aria-label': c ? `Color ${c}` : 'No color', 'aria-pressed': String(td.color === c),
-      onclick: () => { td.color = c; renderTagColors(); },
-    });
-    if (c) b.style.setProperty('--sw', c);
-    return b;
-  }));
+  $('#tag-colors').replaceChildren(...colorRow(td.color, (c) => { td.color = c; renderTagColors(); }));
 }
 $('#tag-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2046,15 +2074,7 @@ fdlg.addEventListener('close', () => { if (fd) { fd.resolve(fd.result); fd = nul
 
 // Color swatches and icon choices in the folder dialog.
 function renderFolderLook() {
-  $('#folder-colors').replaceChildren(...FOLDER_COLORS.map((c) => {
-    const b = h('button', {
-      type: 'button', class: 'swatch' + (c ? '' : ' none') + (fd.color === c ? ' on' : ''),
-      title: c || 'No color', 'aria-label': c ? `Color ${c}` : 'No color', 'aria-pressed': String(fd.color === c),
-      onclick: () => { fd.color = c; renderFolderLook(); },
-    });
-    if (c) b.style.setProperty('--sw', c);
-    return b;
-  }));
+  $('#folder-colors').replaceChildren(...colorRow(fd.color, (c) => { fd.color = c; renderFolderLook(); }));
   $('#folder-icons').replaceChildren(...Object.keys(FOLDER_ICONS).map((k) => h('button', {
     type: 'button', class: 'icon-opt' + ((fd.icon || 'folder') === k ? ' on' : ''),
     title: k, 'aria-label': `Icon ${k}`, 'aria-pressed': String((fd.icon || 'folder') === k),
@@ -3062,7 +3082,6 @@ DARK_MQ.addEventListener('change', () => { if (prefs.theme === 'system') applyPr
 $('#set-palette').addEventListener('change', (e) => { prefs.palette = e.target.value; savePrefs(); applyPrefs(); });
 
 // ---- accent color: buttons, selection, toggles, focus rings ----
-const ACCENTS = ['', '#e5484d', '#f76b15', '#f5b400', '#30a46c', '#12a594', '#3e63dd', '#8e4ec6', '#d6409f', '#a07553'];
 // Black or white text, whichever reads better on the accent.
 function textOn(hex) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -3073,19 +3092,7 @@ function setAccent(c) {
   savePrefs(); applyPrefs(); renderAccent();
 }
 function renderAccent() {
-  const custom = prefs.accent && !ACCENTS.includes(prefs.accent);
-  const pick = h('input', { type: 'color', title: 'Your own color', 'aria-label': 'Your own accent color',
-    class: custom ? 'on' : null, value: prefs.accent || '#3e63dd', onchange: (e) => setAccent(e.target.value) });
-  // Colors are set through the style object: the page's security policy blocks style="" text.
-  $('#set-accent').replaceChildren(...ACCENTS.map((c) => {
-    const b = h('button', {
-      type: 'button', class: 'swatch' + (c ? '' : ' none') + (prefs.accent === c ? ' on' : ''),
-      title: c || 'Theme default', 'aria-label': c ? `Accent ${c}` : 'Theme default accent',
-      'aria-pressed': String(prefs.accent === c), onclick: () => setAccent(c),
-    });
-    if (c) b.style.setProperty('--sw', c);
-    return b;
-  }), pick);
+  $('#set-accent').replaceChildren(...colorRow(prefs.accent, setAccent, 'Theme default'));
 }
 $('#set-ftint').addEventListener('change', (e) => { prefs.folderTint = e.target.checked; savePrefs(); applyPrefs(); });
 $('#main').addEventListener('wheel', (e) => {

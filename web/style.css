@@ -823,10 +823,11 @@ html[data-ftint] .card.has-fc::before {
 html[data-layout="list"][data-ftint] .card.has-fc::before, html[data-layout="compact"][data-ftint] .card.has-fc::before { right: auto; bottom: 0; width: 4px; height: auto; }
 /* Accent color choices in Settings. */
 .accent-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-#set-accent input[type=color] { flex: none; width: 30px !important; height: 30px; min-width: 0; padding: 0 !important; border: 1px solid var(--line); border-radius: 50%; overflow: hidden; cursor: pointer; background: none; }
-.accent-row input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
-.accent-row input[type=color]::-webkit-color-swatch { border: 0; border-radius: 50%; }
-.accent-row input[type=color].on { box-shadow: 0 0 0 2px var(--accent); }
+/* The picker swatch: a color wheel until a picked color fills it. */
+.swatch.picker { position: relative; display: inline-block; overflow: hidden;
+  background: conic-gradient(#e5484d, #f5b400, #30a46c, #12a594, #3e63dd, #8e4ec6, #d6409f, #e5484d); }
+.swatch.picker.on { background: var(--sw); }
+.swatch.picker input { position: absolute; inset: 0; width: 100% !important; height: 100%; padding: 0 !important; margin: 0; opacity: 0; cursor: pointer; border: 0; }
 
 /* View menu in the header */
 .view-menu { width: 270px; padding: 6px 10px 10px; }
