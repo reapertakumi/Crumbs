@@ -98,10 +98,17 @@ function writeStore(key, val) {
 const prefs = Object.assign(
   {
     theme: 'system', palette: 'mono', accent: '', accentFg: '', folderTint: true, size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
-    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
+    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false, sideTab: 'folders',
   },
   readStore('crumbs.prefs', {}));
 const savePrefs = () => writeStore('crumbs.prefs', prefs);
+
+// What a card shows. Image, title, link, folder and tags by default.
+const FIELDS = [
+  ['image', 'Image', true], ['title', 'Title', true], ['url', 'URL', true], ['folder', 'Folder', true],
+  ['tags', 'Tags', true], ['desc', 'Description', false], ['created', 'Created date', false], ['updated', 'Updated date', false],
+];
+prefs.fields = Object.assign(Object.fromEntries(FIELDS.map(([k, , on]) => [k, on])), prefs.fields || {});
 
 // The background photo is kept separately (it can be a few hundred KB).
 function readBgImage() { try { return localStorage.getItem('crumbs.bgimg') || ''; } catch { return ''; } }
@@ -143,6 +150,8 @@ function applyPrefs() {
     root.style.setProperty('--accent-fg', prefs.accentFg || '#fff');
   } else { root.style.removeProperty('--accent'); root.style.removeProperty('--accent-fg'); }
   root.toggleAttribute('data-ftint', prefs.folderTint !== false);
+  root.dataset.hide = FIELDS.filter(([k]) => !prefs.fields[k]).map(([k]) => k).join(' ');
+  renderViewMenu();
   // Card scale: the smallest card width in px (Small/Medium/Large are 190/250/330).
   const px = Number(prefs.scale) || SIZE_PRESETS[prefs.size] || 250;
   root.style.setProperty('--card-min', px + 'px');
@@ -460,7 +469,9 @@ document.addEventListener('click', (e) => {
   }
   // Sort options keep the menu open so a second click can flip the order.
   // (composedPath, because the sort menu redraws itself during the click.)
-  if (!e.composedPath().includes($('#sort-menu'))) closeMenus();
+  // The View menu stays open too, so several fields can be ticked in a row.
+  const path = e.composedPath();
+  if (!path.includes($('#sort-menu')) && !path.includes($('#view-menu'))) closeMenus();
 
   const act = e.target.closest('[data-act]');
   if (act) runAction(act.dataset.act);
@@ -486,6 +497,7 @@ function runAction(name) {
   switch (name) {
     case 'add-bookmark': return openEditor();
     case 'add-folder': return openFolderDialog(null, S.view > 0 ? S.view : null);
+    case 'add-tag': return addTag();
     case 'admin': return openAdmin();
     case 'profile': return openProfile();
     case 'settings': return openSettings();
@@ -684,6 +696,7 @@ async function loadBookmarks() {
   S.trash = data.trash || [];
   S.trashDays = data.trashDays || 30;
   S.folders = data.folders || [];
+  S.savedTags = data.tags || [];
   indexFolders();
   if (S.view > 0 && !S.fmap.has(S.view)) S.view = null;
   buildCards();
@@ -733,6 +746,9 @@ function buildCards() {
   orderGrid();
 }
 
+const DATE_FMT = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const shortDate = (sec) => DATE_FMT.format(new Date(sec * 1000));
+
 function card(b) {
   const host = hostOf(b.url);
   const noDrag = { draggable: 'false' };
@@ -752,8 +768,11 @@ function card(b) {
     h('div', { class: 'card-title' },
       b.icon ? h('img', { class: 'fav', src: b.icon, alt: '', loading: 'lazy', ...noDrag }) : null,
       h('span', { text: b.name })),
-    h('div', { class: 'card-meta' }, h('span', { text: host }), tag),
-    b.description ? h('p', { class: 'card-desc', text: b.description }) : null);
+    h('div', { class: 'card-meta' }, h('span', { class: 'card-host', text: host }), tag),
+    b.description ? h('p', { class: 'card-desc', text: b.description }) : null,
+    h('div', { class: 'card-dates' },
+      b.created ? h('span', { class: 'd-created', text: 'Created ' + shortDate(b.created) }) : null,
+      b.updated ? h('span', { class: 'd-updated', text: 'Updated ' + shortDate(b.updated) }) : null));
 
   const tags = b.tags && b.tags.length
     ? h('div', { class: 'card-tags' }, ...b.tags.slice(0, 5).map((t) => h('button', {
@@ -1210,6 +1229,7 @@ function toggleNode(node, btn, onChange) {
 
 function allTags() {
   const counts = new Map();
+  for (const t of S.savedTags || []) counts.set(t, 0);
   for (const b of S.list) for (const t of b.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
   return [...counts.entries()].sort((a, b) => coll.compare(a[0], b[0]));
 }
@@ -1238,13 +1258,21 @@ function renderTree() {
     trashRow,
     broken ? simpleRow('broken', 'alert', 'Broken links', broken) : null,
     h('div', { class: 'tree-sep' }),
-    ...top,
   ];
-  if (!top.length) parts.push(h('div', { class: 'tree-empty', text: 'No folders yet. Use “Add folder”.' }));
-
   const tags = allTags();
-  if (tags.length) {
-    parts.push(h('div', { class: 'tree-sep' }), h('div', { class: 'tree-head', text: 'Tags' }));
+  const tab = prefs.sideTab === 'tags' ? 'tags' : 'folders';
+  const tabBtn = (v, label, n) => h('button', {
+    type: 'button', role: 'tab', class: tab === v ? 'on' : '', 'aria-selected': String(tab === v),
+    onclick: () => { prefs.sideTab = v; savePrefs(); renderTree(); },
+  }, label, h('span', { class: 'count', text: String(n) }));
+  parts.push(h('div', { class: 'side-tabs', role: 'tablist' },
+    tabBtn('folders', 'Folders', S.folders.length), tabBtn('tags', 'Tags', tags.length)));
+
+  if (tab === 'folders') {
+    parts.push(...top);
+    if (!top.length) parts.push(h('div', { class: 'tree-empty', text: 'No folders yet. Use “Add”.' }));
+  } else {
+    if (!tags.length) parts.push(h('div', { class: 'tree-empty', text: 'No tags yet. Use “Add”, or give a crumb a tag.' }));
     for (const [t, n] of tags) {
       const row = h('div', { class: 'ti tagrow' + (S.view === 'tag:' + t ? ' active' : '') },
         h('span', { class: 'twisty none' }),
@@ -1260,6 +1288,18 @@ function renderTree() {
   }
   $('#tree').replaceChildren(...parts.filter(Boolean));
   $('#tag-list').replaceChildren(...tags.map(([t]) => h('option', { value: t })));
+}
+
+async function addTag() {
+  const name = await ask({ title: 'Add tag', text: 'It shows under Tags right away. Drag crumbs onto it to tag them.', ok: 'Add tag', input: { type: 'text', placeholder: 'e.g. recipes' } });
+  if (!name || !name.trim()) return;
+  try {
+    const r = await api('POST', '/api/tags', { add: name.trim() });
+    prefs.sideTab = 'tags'; savePrefs();
+    await loadBookmarks();
+    if (!document.body.classList.contains('side-open')) setSidebar(true);
+    toast(`Tag #${r.tag} added`);
+  } catch (err) { toast(err.message); }
 }
 
 async function renameTag(t) {
@@ -2818,7 +2858,7 @@ function openSettings() {
   $('#settings').showModal();
 }
 
-const SEGMENTS =[['#set-theme', 'theme'], ['#set-size', 'size'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
+const SEGMENTS = [['#set-theme', 'theme'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
 
 function renderSettings() {
   for (const [id, key] of SEGMENTS) {
@@ -2840,6 +2880,23 @@ function renderSettings() {
 }
 
 // ---- card scale: a slider in Settings, or Ctrl + scroll over the crumbs ----
+
+// ---- the View menu in the header: layout, card size, visible fields ----
+function renderViewMenu() {
+  const menu = document.getElementById('view-menu');
+  if (!menu) return;
+  for (const b of menu.querySelectorAll('#set-layout button[data-v]')) {
+    b.classList.toggle('on', b.dataset.v === prefs.layout);
+    b.setAttribute('aria-pressed', String(b.dataset.v === prefs.layout));
+  }
+  $('#set-scale').value = String(prefs.scale);
+  $('#scale-val').textContent = Math.round((prefs.scale / 250) * 100) + '%';
+  $('#view-fields').replaceChildren(...FIELDS.map(([k, label]) => h('button', {
+    type: 'button', role: 'menuitemcheckbox', class: 'field' + (prefs.fields[k] ? ' on' : ''),
+    'aria-checked': String(!!prefs.fields[k]),
+    onclick: () => { prefs.fields[k] = !prefs.fields[k]; savePrefs(); applyPrefs(); },
+  }, icon('check'), label)));
+}
 
 function setScale(px) {
   px = Math.min(SCALE_MAX, Math.max(SCALE_MIN, Math.round(px / 10) * 10));
@@ -2979,8 +3036,9 @@ $('#reset-settings').addEventListener('click', async () => {
   if (!ok) return;
   try { ['crumbs.prefs', 'crumbs.tree', 'crumbs.bgimg'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
   Object.assign(prefs, {
-    theme: 'system', palette: 'mono', size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
-    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false,
+    theme: 'system', palette: 'mono', accent: '', accentFg: '', folderTint: true, size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
+    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false, sideTab: 'folders',
+    fields: Object.fromEntries(FIELDS.map(([k, , on]) => [k, on])),
   });
   treeState.open.clear();
   treeState.uncatClosed = false;

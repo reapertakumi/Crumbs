@@ -7,6 +7,11 @@ try {
   if (p.theme === 'dark' || (p.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) r.setAttribute('data-dark', '');
   if (p.accent) { r.style.setProperty('--accent', p.accent); r.style.setProperty('--accent-fg', p.accentFg || '#fff'); }
   if (p.folderTint !== false) r.setAttribute('data-ftint', '');
+  var f = p.fields || {}, def = { desc: 1, created: 1, updated: 1 }, hide = [];
+  ['image', 'title', 'url', 'folder', 'tags', 'desc', 'created', 'updated'].forEach(function (k) {
+    if (k in f ? !f[k] : k in def) hide.push(k);
+  });
+  r.dataset.hide = hide.join(' ');
   if (p.size) r.dataset.size = p.size;
   if (p.scale) { r.style.setProperty('--card-min', p.scale + 'px'); r.dataset.size = p.scale < 210 ? 's' : p.scale > 300 ? 'l' : 'm'; }
   if (p.layout) r.dataset.layout = p.layout;

@@ -230,7 +230,15 @@ label > input, label > textarea, label > select, label > .with-icon { margin-top
 }
 body.side-open .sidebar { transform: none; visibility: visible; }
 body:not(.side-open) .sidebar { transition: transform .3s var(--ease), visibility 0s linear .3s; }
-.side-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 14px 10px; }
+.side-actions { padding: 14px 14px 10px; }
+.side-add > .btn { width: 100%; height: 46px; justify-content: center; font-size: 15px; font-weight: 600; border-radius: 14px; }
+.side-add > .menu { left: 0; right: 0; min-width: 0; }
+/* Folders / Tags switch in the sidebar */
+.side-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin: 2px 6px 8px; padding: 3px; border: 1px solid var(--line); border-radius: 12px; }
+.side-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.side-tabs button:hover { background: var(--hover); color: var(--fg); }
+.side-tabs button.on { background: var(--accent); color: var(--accent-fg); }
+.side-tabs .count { font-size: 12px; font-weight: 500; opacity: .75; }
 .tree { flex: 1; overflow-y: auto; padding: 4px 8px 24px; }
 
 .node { --depth: 0; }
@@ -757,7 +765,9 @@ body.lassoing .card { transition: none; }
 .menu { will-change: opacity, transform; backface-visibility: hidden; }
 
 /* ---------- v9: while a window (Settings, Profile, Admin, …) is open, only it scrolls ---------- */
-html:has(dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+/* The scrollbar space is always kept, so opening a dialog (which stops the page scrolling) never changes the width and the cards behind it stay put. */
+html { scrollbar-gutter: stable; }
+html:has(dialog[open]) { overflow: hidden; }
 dialog { overscroll-behavior: contain; }
 
 /* ---------- v9: profile picture menu ---------- */
@@ -807,3 +817,27 @@ html[data-layout="list"][data-ftint] .card.has-fc::before, html[data-layout="com
 .accent-row input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
 .accent-row input[type=color]::-webkit-color-swatch { border: 0; border-radius: 50%; }
 .accent-row input[type=color].on { box-shadow: 0 0 0 2px var(--accent); }
+
+/* View menu in the header */
+.view-menu { width: 270px; padding: 6px 10px 10px; }
+.view-menu .menu-cap { padding: 10px 2px 6px; }
+.view-menu .seg { display: flex; width: 100%; flex-wrap: nowrap; }
+.view-menu .seg button { flex: 1; width: auto; justify-content: center; padding: 0 6px; font-size: 13px; }
+.view-menu .scale-range { margin: 0; }
+.view-menu .field { padding: 7px 8px; }
+.view-menu .field svg { width: 16px; height: 16px; opacity: 0; }
+.view-menu .field.on svg { opacity: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Visible fields: whatever is ticked off in the View menu */
+.card-dates { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.card-dates:empty { display: none; }
+html[data-hide~="image"] .card .thumb { display: none; }
+html[data-hide~="title"] .card .card-title { display: none; }
+html[data-hide~="url"] .card .card-host { display: none; }
+html[data-hide~="folder"] .card .card-meta .tag { display: none; }
+html[data-hide~="url"][data-hide~="folder"] .card .card-meta { display: none; }
+html[data-hide~="tags"] .card .card-tags { display: none; }
+html[data-hide~="desc"] .card .card-desc { display: none; }
+html[data-hide~="created"] .card .d-created { display: none; }
+html[data-hide~="updated"] .card .d-updated { display: none; }
+html[data-hide~="created"][data-hide~="updated"] .card .card-dates { display: none; }

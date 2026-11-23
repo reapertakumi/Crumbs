@@ -149,14 +149,37 @@ func (a *App) handleBulk(w http.ResponseWriter, r *http.Request, who *Who) {
 	writeJSON(w, http.StatusOK, map[string]int{"changed": changed, "skipped": skipped})
 }
 
-// handleTagEdit renames a tag ({"from","to"}) or removes it everywhere ({"from"} with an empty "to").
+// handleTagEdit makes a new, empty tag ({"add"}), renames a tag ({"from","to"})
+// or removes it everywhere ({"from"} with an empty "to").
 func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 	var in struct {
+		Add  string `json:"add"`
 		From string `json:"from"`
 		To   string `json:"to"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	var saved string
+	a.db.QueryRow(`SELECT saved_tags FROM users WHERE id = ?`, who.ID).Scan(&saved)
+	savedTags := splitTags(saved)
+	if in.Add != "" {
+		add := cleanTag(in.Add)
+		if add == "" {
+			jsonErr(w, http.StatusBadRequest, "type a tag name")
+			return
+		}
+		if len(savedTags) >= 500 {
+			jsonErr(w, http.StatusBadRequest, "too many tags")
+			return
+		}
+		next := append(savedTags, add)
+		if _, err := a.db.Exec(`UPDATE users SET saved_tags = ? WHERE id = ?`, joinSavedTags(next), who.ID); err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"tag": add})
 		return
 	}
 	from, to := cleanTag(in.From), cleanTag(in.To)
@@ -195,7 +218,32 @@ func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 		}
 		a.db.Exec(`UPDATE bookmarks SET tags = ? WHERE id = ?`, joinTags(cleanTags(next)), rw.id)
 	}
+	// The saved (possibly empty) tags follow the rename or removal too.
+	var keep []string
+	for _, t := range savedTags {
+		switch {
+		case t != from:
+			keep = append(keep, t)
+		case to != "":
+			keep = append(keep, to)
+		}
+	}
+	a.db.Exec(`UPDATE users SET saved_tags = ? WHERE id = ?`, joinSavedTags(keep), who.ID)
 	writeJSON(w, http.StatusOK, map[string]int{"changed": len(list)})
+}
+
+// joinSavedTags stores a user's own tag list: cleaned and without doubles,
+// but not cut at 20 like the tags on one crumb.
+func joinSavedTags(in []string) string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, t := range in {
+		if t = cleanTag(t); t != "" && !seen[t] {
+			seen[t] = true
+			out = append(out, t)
+		}
+	}
+	return joinTags(out)
 }
 
 
@@ -230,6 +278,7 @@ func (a *App) handleWipe(w http.ResponseWriter, r *http.Request, who *Who) {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	tx.Exec(`UPDATE users SET saved_tags = '' WHERE id = ?`, who.ID)
 	res, err := tx.Exec(`DELETE FROM folders WHERE user_id = ?`, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())

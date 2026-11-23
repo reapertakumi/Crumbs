@@ -188,7 +188,10 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "trash": trash, "folders": folders, "trashDays": trashDays})
+	// Tags made with "Add tag" are listed even while no crumb has them.
+	var saved string
+	a.db.QueryRow(`SELECT saved_tags FROM users WHERE id = ?`, who.ID).Scan(&saved)
+	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "trash": trash, "folders": folders, "trashDays": trashDays, "tags": splitTags(saved)})
 }
 
 func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
