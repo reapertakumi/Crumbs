@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.1.0 – colors, a new sidebar and a right-click menu
+
+**Update:** `docker compose pull && docker compose up -d`. Image: `ghcr.io/reapertakumi/crumbs:1.1.0` (also `:latest`).
+Your crumbs, folders and settings carry over; the database gets two new columns by itself.
+
+### Look
+- **Day / Night / System** button at the far right of the header, with a circle animation that spreads from the button.
+- **18 color themes** in Settings → Colors: Black & white, Cappuccino, Paper, Forest, Ocean, Nord, Rose, Midnight, Matcha,
+  Lavender, Sakura, Sand, Slate, Solarized, Gruvbox, Dracula, High contrast and AMOLED black, each with a day and night look.
+- **Accent color** for buttons, selection, toggles and focus rings.
+- **Color rows** everywhere (accent, folders, tags): no color, a color picker for any color, then your 9 recent colors.
+- **Folder colors on cards:** a thin stripe in the folder's color (can be turned off).
+- Search links (Google, YouTube, Bing, DuckDuckGo, Amazon, Reddit, GitHub, …) show a search card with the site's icon and
+  the words searched instead of a blank tile.
+
+### Sidebar
+- One big **Add** button: bookmark, folder or tag.
+- **Folders / Tags** switch with a sliding underline. The top stays pinned; only the list scrolls.
+- **Resize** the sidebar by dragging its right edge (double-click resets).
+- With the sidebar closed, resting the mouse at the left edge **slides it out** for a moment.
+- **Tags** can exist before any crumb has them, and get **colors** like folders (shown in the sidebar and on cards).
+- Edit folder: the icon sits next to the name and opens a small icon menu. Clicking outside the folder or tag window closes it.
+
+### Crumbs
+- **View** menu in the header: layout, card size and **visible fields** (image, title, URL, folder, tags, description,
+  created and updated date). Layout and card size moved here from Settings.
+- **Right-click menu** on crumbs: open in new tab, copy link, edit, move, add tag, refresh, select, delete (restore and
+  delete forever in the Trash). Works on a whole selection too.
+- Titles come from the page's own `<title>`, the one the browser tab shows. YouTube titles end in " - YouTube".
+
+### Fixes
+- Opening a window (Settings, Profile, Admin, …) no longer makes the cards behind it jump.
+- Accent swatches and folder stripes now show their colors with the page's security policy on.
+- Icons in the folder window no longer show up black.
+
+**Going back:** the tag `restore-before-sidebar-tabs` is the version before the new sidebar; `v1.0.0` is the first release.
+
 ## v1.0.0 – first release
 
 Crumbs is a visual, black-and-white bookmark manager that runs on a Raspberry Pi 5 in one small Docker container.

@@ -61,7 +61,7 @@ docker compose up -d
 ```
 
 To stay on one version instead of `latest`, put it in `docker-compose.yml`:
-`image: ghcr.io/reapertakumi/crumbs:1.0.0`.
+`image: ghcr.io/reapertakumi/crumbs:1.1.0` (or `:1.0.0`).
 
 ## Go back to an older version
 
