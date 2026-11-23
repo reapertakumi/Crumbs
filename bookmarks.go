@@ -190,11 +190,20 @@ func (a *App) handleListBookmarks(w http.ResponseWriter, r *http.Request, who *W
 	}
 	// Tags made with "Add tag" are listed even while no crumb has them.
 	var saved, colorsJSON, smartJSON string
-	var limit int64
-	a.db.QueryRow(`SELECT saved_tags, tag_colors, smart_folders, storage_limit FROM users WHERE id = ?`, who.ID).Scan(&saved, &colorsJSON, &smartJSON, &limit)
+	var limit, request int64
+	var answer string
+	a.db.QueryRow(`SELECT saved_tags, tag_colors, smart_folders, storage_limit, limit_request, limit_answer FROM users WHERE id = ?`, who.ID).
+		Scan(&saved, &colorsJSON, &smartJSON, &limit, &request, &answer)
+	// Admins see how many users are waiting for more space.
+	var pending int64
+	if who.IsAdmin {
+		a.db.QueryRow(`SELECT COUNT(*) FROM users WHERE limit_request > 0`).Scan(&pending)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"bookmarks": list, "trash": trash, "folders": folders, "trashDays": trashDays,
 		"tags": splitTags(saved), "tagColors": tagColorMap(colorsJSON), "smart": smartList(smartJSON),
-		"storage": map[string]int64{"used": a.storageUsed(who.ID), "limit": limit}})
+		"storage": map[string]any{"used": a.storageUsed(who.ID), "limit": limit, "requested": request, "answer": answer,
+			"reserve": a.perCrumbReserve(who.ID)},
+		"limitRequests": pending})
 }
 
 func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *Who) {
@@ -211,8 +220,8 @@ func (a *App) handleCreateBookmark(w http.ResponseWriter, r *http.Request, who *
 		jsonErr(w, http.StatusConflict, err.Error())
 		return
 	}
-	if err := a.checkStorage(who.ID, int64(len(in.Name)+len(in.URL)+len(in.Description))); err != nil {
-		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+	// Room for the text and for the thumbnail and favicon that follow.
+	if a.storageFull(w, who.ID, int64(len(in.Name)+len(in.URL)+len(in.Description))+a.perCrumbReserve(who.ID)) {
 		return
 	}
 	now := time.Now().Unix()
@@ -465,8 +474,7 @@ func (a *App) handlePutImage(w http.ResponseWriter, r *http.Request, who *Who) {
 	sizeCol := kind + "_size"
 	var oldSize int64
 	a.db.QueryRow(`SELECT `+sizeCol+` FROM bookmarks WHERE id = ?`, id).Scan(&oldSize)
-	if err := a.checkStorage(who.ID, int64(len(data))-oldSize); err != nil {
-		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+	if a.storageFull(w, who.ID, int64(len(data))-oldSize) {
 		return
 	}
 	if err := writeFileAtomic(a.imgPath(id, kind), data); err != nil {

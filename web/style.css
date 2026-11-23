@@ -902,3 +902,15 @@ body.side-resizing .main, body.side-resizing .sidebar { transition: none !import
 .me-storage .bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width .4s var(--ease); }
 .me-storage .bar.full i { background: #e5484d; }
 .me-storage-nums { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Asking for more space */
+.me-request { margin-top: 6px; font-size: 11.5px; color: #c99a00; }
+#me-dd { position: relative; }
+#me-dd.has-notice > [data-dd]::after {
+  content: ""; position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%;
+  background: #f5b400; box-shadow: 0 0 0 2px var(--bg);
+}
+.req-dot { width: 10px; height: 10px; border-radius: 50%; background: #f5b400; flex: none; }
+.user-row .name { align-items: center; }
+.req-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 12.5px; color: #c99a00; font-weight: 600; }
+.req-line .btn { height: 28px; }

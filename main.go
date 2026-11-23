@@ -111,6 +111,8 @@ func (a *App) routes(mux *http.ServeMux, static fs.FS) {
 	mux.HandleFunc("POST /api/bookmarks/bulk", a.user(a.handleBulk))
 	mux.HandleFunc("POST /api/tags", a.user(a.handleTagEdit))
 	mux.HandleFunc("PUT /api/smart", a.user(a.handleSmartFolders))
+	mux.HandleFunc("POST /api/me/limit-request", a.user(a.handleLimitRequest))
+	mux.HandleFunc("POST /api/users/{id}/limit-request", a.admin(a.handleAnswerLimit))
 	mux.HandleFunc("POST /api/wipe", a.user(a.handleWipe))
 	mux.HandleFunc("GET /api/linkcheck", a.user(a.handleLinkStatus))
 	mux.HandleFunc("POST /api/linkcheck", a.user(a.handleLinkCheck))

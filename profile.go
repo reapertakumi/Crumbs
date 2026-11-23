@@ -58,8 +58,7 @@ func (a *App) handleUploadAvatar(w http.ResponseWriter, r *http.Request, who *Wh
 	}
 	var oldSize int64
 	a.db.QueryRow(`SELECT avatar_size FROM users WHERE id = ?`, who.ID).Scan(&oldSize)
-	if err := a.checkStorage(who.ID, int64(len(data))-oldSize); err != nil {
-		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+	if a.storageFull(w, who.ID, int64(len(data))-oldSize) {
 		return
 	}
 	if err := writeFileAtomic(a.avatarPath(who.ID), data); err != nil {

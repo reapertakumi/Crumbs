@@ -24,6 +24,105 @@ func (a *App) storageUsed(uid int64) int64 {
 	return n
 }
 
+// perCrumbReserve is the space a new crumb is expected to need for its
+// thumbnail and favicon, which the browser uploads right after saving it:
+// the user's own average, or 30 KB before they have any pictures.
+func (a *App) perCrumbReserve(uid int64) int64 {
+	var total, n int64
+	a.db.QueryRow(`SELECT COALESCE(SUM(thumb_size + icon_size), 0), COUNT(*) FROM bookmarks
+		WHERE user_id = ? AND (thumb_size + icon_size) > 0`, uid).Scan(&total, &n)
+	if n == 0 {
+		return 30 << 10
+	}
+	avg := total / n
+	if avg < 8<<10 {
+		avg = 8 << 10
+	}
+	return avg
+}
+
+// storageFull answers 507 with what is needed, so the app can offer to ask an
+// admin for more space. It returns false when there is room.
+func (a *App) storageFull(w http.ResponseWriter, uid, extra int64) bool {
+	if a.checkStorage(uid, extra) == nil {
+		return false
+	}
+	var limit, request int64
+	a.db.QueryRow(`SELECT storage_limit, limit_request FROM users WHERE id = ?`, uid).Scan(&limit, &request)
+	used := a.storageUsed(uid)
+	writeJSON(w, http.StatusInsufficientStorage, map[string]any{
+		"error": errStorageFull.Error(), "storageFull": true,
+		"used": used, "limit": limit, "needed": used + extra, "requested": request,
+	})
+	return true
+}
+
+// handleLimitRequest: a user asks for a bigger storage limit ({"bytes"}),
+// or clears the admin's answer after reading it ({"seen": true}).
+func (a *App) handleLimitRequest(w http.ResponseWriter, r *http.Request, who *Who) {
+	if who.Guest {
+		jsonErr(w, http.StatusForbidden, "sign in to ask for more space")
+		return
+	}
+	var in struct {
+		Bytes int64 `json:"bytes"`
+		Seen  bool  `json:"seen"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		jsonErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	if in.Seen {
+		a.db.Exec(`UPDATE users SET limit_answer = '' WHERE id = ?`, who.ID)
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+	var limit int64
+	a.db.QueryRow(`SELECT storage_limit FROM users WHERE id = ?`, who.ID).Scan(&limit)
+	if limit <= 0 {
+		jsonErr(w, http.StatusBadRequest, "you have no storage limit")
+		return
+	}
+	if in.Bytes <= limit || in.Bytes > 1<<40 {
+		jsonErr(w, http.StatusBadRequest, "ask for more than your current limit")
+		return
+	}
+	a.db.Exec(`UPDATE users SET limit_request = ?, limit_answer = '' WHERE id = ?`, in.Bytes, who.ID)
+	writeJSON(w, http.StatusOK, map[string]int64{"requested": in.Bytes})
+}
+
+// handleAnswerLimit: an admin approves ({"approve": true}: the limit becomes
+// the requested amount) or denies a user's request.
+func (a *App) handleAnswerLimit(w http.ResponseWriter, r *http.Request, who *Who) {
+	id, err := pathID(r)
+	if err != nil {
+		jsonErr(w, http.StatusNotFound, "no such user")
+		return
+	}
+	var in struct {
+		Approve bool `json:"approve"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		jsonErr(w, http.StatusBadRequest, "bad request")
+		return
+	}
+	var request int64
+	if a.db.QueryRow(`SELECT limit_request FROM users WHERE id = ?`, id).Scan(&request) != nil {
+		jsonErr(w, http.StatusNotFound, "no such user")
+		return
+	}
+	if request <= 0 {
+		jsonErr(w, http.StatusBadRequest, "there is no request to answer")
+		return
+	}
+	if in.Approve {
+		a.db.Exec(`UPDATE users SET storage_limit = limit_request, limit_request = 0, limit_answer = 'approved' WHERE id = ?`, id)
+	} else {
+		a.db.Exec(`UPDATE users SET limit_request = 0, limit_answer = 'denied' WHERE id = ?`, id)
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // checkStorage fails if adding `extra` bytes would go over the user's limit.
 func (a *App) checkStorage(uid, extra int64) error {
 	if extra <= 0 {
@@ -88,13 +187,14 @@ type adminUser struct {
 	Blocked      bool  `json:"blocked"`
 	StorageUsed  int64 `json:"storageUsed"`
 	StorageLimit int64 `json:"storageLimit"`
+	LimitRequest int64 `json:"limitRequest"`
 	Created      int64 `json:"created"`
 	Bookmarks    int   `json:"bookmarks"`
 }
 
 func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request, who *Who) {
 	rows, err := a.db.Query(`
-		SELECT u.id, u.username, u.display_name, u.is_admin, u.avatar, u.blocked, u.storage_limit, u.created_at,
+		SELECT u.id, u.username, u.display_name, u.is_admin, u.avatar, u.blocked, u.storage_limit, u.limit_request, u.created_at,
 		       (SELECT COUNT(*) FROM bookmarks b WHERE b.user_id = u.id AND b.deleted_at = 0), ` + usageSQL + `
 		FROM users u ORDER BY u.id`)
 	if err != nil {
@@ -106,7 +206,7 @@ func (a *App) handleListUsers(w http.ResponseWriter, r *http.Request, who *Who) 
 		var u adminUser
 		var admin, blocked int
 		var av string
-		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &admin, &av, &blocked, &u.StorageLimit,
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &admin, &av, &blocked, &u.StorageLimit, &u.LimitRequest,
 			&u.Created, &u.Bookmarks, &u.StorageUsed); err != nil {
 			rows.Close()
 			jsonErr(w, http.StatusInternalServerError, err.Error())
@@ -247,6 +347,9 @@ func (a *App) handlePatchUser(w http.ResponseWriter, r *http.Request, who *Who) 
 	}
 	if in.StorageLimit != nil {
 		a.db.Exec(`UPDATE users SET storage_limit = ? WHERE id = ?`, *in.StorageLimit, id)
+		// A limit raised by hand (or removed) to cover a waiting request answers it.
+		a.db.Exec(`UPDATE users SET limit_request = 0, limit_answer = 'approved'
+			WHERE id = ? AND limit_request > 0 AND (storage_limit = 0 OR storage_limit >= limit_request)`, id)
 	}
 	writeJSON(w, http.StatusOK, a.getUser(id))
 }

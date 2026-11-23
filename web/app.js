@@ -209,6 +209,7 @@ async function api(method, path, body) {
   if (!res.ok) {
     const err = new Error((data && data.error) || `${res.status} ${res.statusText}`);
     err.status = res.status;
+    err.data = data;
     if ((res.status === 401 && path !== '/api/login') || res.status === 423) boot(); // 423: the database is locked
     throw err;
   }
@@ -513,6 +514,53 @@ function runAction(name) {
 }
 
 // Storage bar under the name: used on the left, the limit on the right.
+// ---- asking an admin for a bigger storage limit ----
+const MB = 1024 * 1024;
+function suggestLimit(needed) {
+  // Just enough, rounded up to a friendly size.
+  for (const step of [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]) if (step * MB >= needed * 1.1) return step * MB;
+  return Math.ceil(needed / (1000 * MB)) * 1000 * MB;
+}
+async function askForSpace(info, what) {
+  if (S.guest) { toast('Storage limit reached. Ask the owner for more space.'); return; }
+  const need = Math.max(0, info.needed - info.limit);
+  if (info.requested > 0) {
+    toast(`You already asked for ${formatBytes(info.requested)}. Waiting for an admin.`);
+    return;
+  }
+  const suggested = suggestLimit(info.needed);
+  const ans = await ask({
+    title: 'This goes over your storage limit',
+    text: `Saving ${what} needs about ${formatBytes(need)} more than your limit (${formatBytes(info.used)} of ${formatBytes(info.limit)} used). `
+      + 'Ask an admin for a bigger limit (in MB):',
+    ok: 'Ask admin',
+    input: { type: 'number', value: String(Math.round(suggested / MB)), min: String(Math.ceil(info.limit / MB) + 1), step: '1' },
+  });
+  if (!ans) return;
+  const bytes = Math.round(Number(ans) * MB);
+  try {
+    await api('POST', '/api/me/limit-request', { bytes });
+    await loadBookmarks();
+    toast(`Asked for ${formatBytes(bytes)}. You'll see the answer here.`);
+  } catch (err) { toast(err.message); }
+}
+let answerShown = '';
+function showLimitAnswer() {
+  const a = S.storage && S.storage.answer;
+  if (!a || answerShown === a + S.storage.limit) return;
+  answerShown = a + S.storage.limit;
+  toast(a === 'approved' ? `More space granted: your limit is now ${formatBytes(S.storage.limit)}.` : 'Your request for more space was declined.');
+  api('POST', '/api/me/limit-request', { seen: true }).catch(() => {});
+}
+async function answerLimit(u, approve) {
+  try {
+    await api('POST', `/api/users/${u.id}/limit-request`, { approve });
+    toast(approve ? `${nameOf(u)} now has ${formatBytes(u.limitRequest)}` : `Declined ${nameOf(u)}'s request`);
+    await loadUsers();
+    await loadBookmarks();
+  } catch (err) { toast(err.message); }
+}
+
 function meStorage() {
   const st = S.storage;
   if (!st || S.guest) return null;
@@ -524,7 +572,8 @@ function meStorage() {
     st.limit > 0 ? bar : null,
     h('div', { class: 'me-storage-nums' },
       h('span', { text: formatBytes(st.used) + (st.limit > 0 ? '' : ' used') }),
-      h('span', { text: st.limit > 0 ? formatBytes(st.limit) : 'no limit' })));
+      h('span', { text: st.limit > 0 ? formatBytes(st.limit) : 'no limit' })),
+    st.requested > 0 ? h('div', { class: 'me-request', text: `Asked for ${formatBytes(st.requested)} · waiting for an admin` }) : null);
 }
 
 function renderMe() {
@@ -532,6 +581,8 @@ function renderMe() {
   const u = S.guest ? guestUser : S.me;
   $('#me-name').textContent = nameOf(u);
   fillAvatar($('#me-avatar'), u);
+  $('#me-dd').classList.toggle('has-notice', !S.guest && !!S.me?.isAdmin && S.limitRequests > 0);
+  $('#me-dd [data-dd]').title = S.limitRequests > 0 && S.me?.isAdmin ? `${S.limitRequests} user${S.limitRequests === 1 ? '' : 's'} asked for more space` : '';
   const item = (act, ic, label) => h('button', { type: 'button', role: 'menuitem', 'data-act': act }, icon(ic), label);
   const head = h('div', { class: 'menu-head' }, avatarEl(u, 'sm'),
     h('div', {}, h('strong', { text: nameOf(u) }),
@@ -757,6 +808,8 @@ async function loadBookmarks() {
   S.tagColors = data.tagColors || {};
   S.smart = data.smart || [];
   S.storage = data.storage || null;
+  S.limitRequests = data.limitRequests || 0;
+  showLimitAnswer();
   if (S.me) renderMe();
   if (typeof S.view === 'string' && S.view.startsWith('smart:') && !smartById(S.view)) S.view = null;
   indexFolders();
@@ -2144,7 +2197,8 @@ form.addEventListener('submit', async (e) => {
     await loadBookmarks();
     toast(isNew ? 'Crumb saved' : 'Changes saved');
   } catch (err) {
-    showError('#edit-error', err.message);
+    if (err.data && err.data.storageFull) { dlg.close(); askForSpace(err.data, 'this crumb'); }
+    else showError('#edit-error', err.message);
   } finally {
     busy(btn, false);
   }
@@ -2566,6 +2620,19 @@ $('#io-export').addEventListener('click', async () => {
 // What the last import skipped, so "Show" can open a review of it.
 let review = null; // { items, skipped, user }
 
+// Import, or, when it doesn't fit the user's own limit, offer to ask for more space.
+async function importOrAsk(body) {
+  try {
+    return await api('POST', importPath(), body);
+  } catch (err) {
+    if (err.data && err.data.storageFull && !ioUser) {
+      askForSpace(err.data, `these ${body.items.length} crumb${body.items.length === 1 ? '' : 's'}`);
+      return null;
+    }
+    throw err;
+  }
+}
+
 function importPath() { return ioUser ? `/api/users/${ioUser.id}/import` : '/api/import'; }
 
 function describeImport(r, prefix = 'Added') {
@@ -2611,7 +2678,8 @@ $('#io-file').addEventListener('change', async (e) => {
     const items = parseImport(await file.text(), file.name);
     if (!items.length) { res.textContent = 'No links found in that file.'; return; }
     res.textContent = `Importing ${items.length} links…`;
-    const r = await api('POST', importPath(), { items, skipDuplicates: $('#io-skip').checked });
+    const r = await importOrAsk({ items, skipDuplicates: $('#io-skip').checked });
+    if (!r) return;
     showImportResult(r, items);
     if (ioUser) { if ($('#admin').open) await loadUsers(); return; }
     await loadBookmarks();
@@ -2765,7 +2833,8 @@ $('#review-import').addEventListener('click', async () => {
   const btn = $('#review-import');
   busy(btn, true, 'Importing…');
   try {
-    const r = await api('POST', importPath(), { items, allowDuplicates: true });
+    const r = await importOrAsk({ items, allowDuplicates: true });
+    if (!r) return;
     reviewDlg.close();
     const res = $('#io-result');
     res.hidden = false;
@@ -3559,11 +3628,16 @@ function userRow(u) {
     h('div', { class: 'who' },
       h('div', { class: 'name' },
         h('strong', { text: nameOf(u) }),
+        u.limitRequest > 0 ? h('span', { class: 'req-dot', title: `Asks for ${formatBytes(u.limitRequest)}` }) : null,
         u.isAdmin ? h('span', { class: 'tag', text: 'admin' }) : null,
         u.blocked ? h('span', { class: 'tag', text: 'blocked' }) : null,
         me ? h('span', { class: 'tag', text: 'you' }) : null),
       h('div', { class: 'handle', text: `@${u.username} · ${u.bookmarks} crumb${u.bookmarks === 1 ? '' : 's'}` }),
-      usageLine(u)),
+      usageLine(u),
+      u.limitRequest > 0 ? h('div', { class: 'req-line' },
+        h('span', { text: `Asks for ${formatBytes(u.limitRequest)}` }),
+        h('button', { type: 'button', class: 'btn small primary', text: 'Approve', onclick: () => answerLimit(u, true) }),
+        h('button', { type: 'button', class: 'btn small', text: 'Deny', onclick: () => answerLimit(u, false) })) : null),
     more);
 }
 

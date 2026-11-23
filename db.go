@@ -129,6 +129,8 @@ func migrate(db *sql.DB) error {
 		{"users", "saved_tags", "TEXT NOT NULL DEFAULT ''"},
 		{"users", "tag_colors", "TEXT NOT NULL DEFAULT ''"},
 		{"users", "smart_folders", "TEXT NOT NULL DEFAULT ''"},
+		{"users", "limit_request", "INTEGER NOT NULL DEFAULT 0"},
+		{"users", "limit_answer", "TEXT NOT NULL DEFAULT ''"},
 		{"bookmarks", "thumb_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "icon_size", "INTEGER NOT NULL DEFAULT 0"},
 		{"bookmarks", "deleted_at", "INTEGER NOT NULL DEFAULT 0"},

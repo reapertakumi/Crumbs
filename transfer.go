@@ -187,8 +187,8 @@ func (a *App) importFor(w http.ResponseWriter, r *http.Request, uid int64) {
 		textBytes += int64(len(c.Name) + len(c.URL) + len(c.Description))
 		items = append(items, c)
 	}
-	if err := a.checkStorage(uid, textBytes); err != nil {
-		jsonErr(w, http.StatusInsufficientStorage, err.Error())
+	// The text plus the thumbnails and favicons fetched right after the import.
+	if a.storageFull(w, uid, textBytes+int64(len(items))*a.perCrumbReserve(uid)) {
 		return
 	}
 
