@@ -156,7 +156,9 @@
           </div>
         </div>
       </div>
+      <div class="tree tree-top" id="tree-top"></div>
       <nav class="tree" id="tree"></nav>
+      <div class="side-resize" id="side-resize" title="Drag to resize" aria-hidden="true"></div>
     </aside>
 
     <main class="main" id="main">
@@ -218,6 +220,28 @@
         <span class="spacer"></span>
         <button type="button" class="btn ghost" data-close>Cancel</button>
         <button type="submit" class="btn primary" id="edit-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Add / edit a tag -->
+  <dialog id="tag-dlg" class="narrow">
+    <form id="tag-form" class="modal-body" novalidate>
+      <div class="modal-head">
+        <h2 id="tag-title">Add tag</h2>
+        <button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <label>Name
+        <input name="name" maxlength="40" autocomplete="off" placeholder="e.g. recipes" required>
+      </label>
+      <div class="setting-label">Color</div>
+      <div class="swatches" id="tag-colors"></div>
+      <p class="error" id="tag-error" hidden></p>
+      <div class="row">
+        <button type="button" class="btn" id="tag-delete" hidden>Remove tag</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
       </div>
     </form>
   </dialog>

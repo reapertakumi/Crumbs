@@ -152,6 +152,7 @@ function applyPrefs() {
   root.toggleAttribute('data-ftint', prefs.folderTint !== false);
   root.dataset.hide = FIELDS.filter(([k]) => !prefs.fields[k]).map(([k]) => k).join(' ');
   renderViewMenu();
+  if (prefs.sideW) root.style.setProperty('--side-w', prefs.sideW + 'px');
   // Card scale: the smallest card width in px (Small/Medium/Large are 190/250/330).
   const px = Number(prefs.scale) || SIZE_PRESETS[prefs.size] || 250;
   root.style.setProperty('--card-min', px + 'px');
@@ -697,6 +698,7 @@ async function loadBookmarks() {
   S.trashDays = data.trashDays || 30;
   S.folders = data.folders || [];
   S.savedTags = data.tags || [];
+  S.tagColors = data.tagColors || {};
   indexFolders();
   if (S.view > 0 && !S.fmap.has(S.view)) S.view = null;
   buildCards();
@@ -775,9 +777,12 @@ function card(b) {
       b.updated ? h('span', { class: 'd-updated', text: 'Updated ' + shortDate(b.updated) }) : null));
 
   const tags = b.tags && b.tags.length
-    ? h('div', { class: 'card-tags' }, ...b.tags.slice(0, 5).map((t) => h('button', {
-        type: 'button', class: 'hash', text: '#' + t, title: `Show #${t}`, onclick: () => selectView('tag:' + t),
-      })))
+    ? h('div', { class: 'card-tags' }, ...b.tags.slice(0, 5).map((t) => {
+        const c = (S.tagColors || {})[t];
+        const el = h('button', { type: 'button', class: 'hash' + (c ? ' colored' : ''), text: '#' + t, title: `Show #${t}`, onclick: () => selectView('tag:' + t) });
+        if (c) el.style.setProperty('--tc', c);
+        return el;
+      }))
     : null;
 
   const actions = b.deleted
@@ -1208,21 +1213,63 @@ function setSidebar(open, remember = true) {
 $('#menu-btn').addEventListener('click', () => setSidebar(!document.body.classList.contains('side-open')));
 $('#scrim').addEventListener('click', () => setSidebar(false));
 
+// ---- sidebar width: drag its right edge ----
+const SIDE_MIN = 220, SIDE_MAX = 480;
+function setSideWidth(px, save) {
+  px = Math.round(Math.min(SIDE_MAX, Math.max(SIDE_MIN, px)));
+  document.documentElement.style.setProperty('--side-w', px + 'px');
+  prefs.sideW = px;
+  if (save) savePrefs();
+  sizeEdge();
+}
+if (prefs.sideW) setSideWidth(prefs.sideW, false);
+$('#side-resize').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const bar = e.currentTarget;
+  bar.setPointerCapture(e.pointerId);
+  document.body.classList.add('side-resizing');
+  const move = (ev) => setSideWidth(ev.clientX, false);
+  const up = () => {
+    bar.removeEventListener('pointermove', move);
+    document.body.classList.remove('side-resizing');
+    savePrefs();
+  };
+  bar.addEventListener('pointermove', move);
+  bar.addEventListener('pointerup', up, { once: true });
+  bar.addEventListener('pointercancel', up, { once: true });
+});
+$('#side-resize').addEventListener('dblclick', () => setSideWidth(296, true));
+
+// The hover zone reaches from the window edge to the first column of crumbs.
+function sizeEdge() {
+  const g = document.getElementById('grid');
+  const first = g && g.querySelector('.card');
+  const left = first ? first.getBoundingClientRect().left
+    : g ? g.getBoundingClientRect().left + parseFloat(getComputedStyle(g).paddingLeft) : 0;
+  document.documentElement.style.setProperty('--edge-w', Math.max(10, Math.min(120, Math.round(left))) + 'px');
+}
+addEventListener('resize', sizeEdge);
+
 // While the sidebar is closed, resting the mouse on the left edge slides it
 // out over the crumbs for a moment; it hides again when the mouse leaves.
-let peekTimer = 0;
+let peekTimer = 0, peekClosing = false;
 const peek = (on) => {
+  if (!on && peekClosing) return; // already on its way out
   clearTimeout(peekTimer);
+  peekClosing = !on;
   if (on && (document.body.classList.contains('side-open') || document.querySelector('dialog[open]'))) return;
   if (on) peekTimer = setTimeout(() => document.body.classList.add('side-peek'), 120);
-  else peekTimer = setTimeout(() => document.body.classList.remove('side-peek'), 250);
+  else peekTimer = setTimeout(() => { peekClosing = false; document.body.classList.remove('side-peek'); }, 200);
 };
-$('#side-edge').addEventListener('mouseenter', () => peek(true));
+$('#side-edge').addEventListener('mouseenter', () => { sizeEdge(); peek(true); });
 $('#side-edge').addEventListener('mouseleave', () => { if (!document.body.classList.contains('side-peek')) clearTimeout(peekTimer); });
-$('#sidebar').addEventListener('mouseenter', () => { if (document.body.classList.contains('side-peek')) clearTimeout(peekTimer); });
-$('#sidebar').addEventListener('mouseleave', () => {
-  if (document.body.classList.contains('side-peek') && !$('#sidebar').querySelector('.dd.open')) peek(false);
-});
+// While peeking, follow the mouse: inside the sidebar keeps it, past its right edge hides it.
+document.addEventListener('mousemove', (e) => {
+  if (!document.body.classList.contains('side-peek')) return;
+  const inside = e.clientX <= $('#sidebar').getBoundingClientRect().right + 8 || $('#sidebar').querySelector('.dd.open');
+  if (inside) { clearTimeout(peekTimer); peekClosing = false; } else peek(false);
+}, { passive: true });
+document.documentElement.addEventListener('mouseleave', () => { if (document.body.classList.contains('side-peek')) peek(false); });
 $('#menu-btn').addEventListener('click', () => { clearTimeout(peekTimer); document.body.classList.remove('side-peek'); });
 
 const actBtn = (ic, label, fn) => h('button', { type: 'button', title: label, 'aria-label': label, onclick: fn }, icon(ic));
@@ -1299,31 +1346,79 @@ function renderTree() {
     for (const [t, n] of tags) {
       const row = h('div', { class: 'ti tagrow' + (S.view === 'tag:' + t ? ' active' : '') },
         h('span', { class: 'twisty none' }),
-        icon('tag', 'ico'),
+        tagIcon(t),
         h('button', { type: 'button', class: 'label', text: t, onclick: () => selectView('tag:' + t) }),
         h('span', { class: 'count', text: String(n) }),
         h('span', { class: 'acts' },
-          actBtn('edit', 'Rename tag', () => renameTag(t)),
+          actBtn('edit', 'Edit tag', () => openTagDialog(t)),
           actBtn('trash', 'Remove tag everywhere', () => removeTag(t))));
       dropBookmarksOn(row, (ids) => bulk('addTag', { tag: t }, ids));
       parts.push(row);
     }
   }
-  $('#tree').replaceChildren(...parts.filter(Boolean));
+  // Everything up to the Folders / Tags switch stays pinned; only the list scrolls.
+  const cut = parts.indexOf(tabsEl) + 1;
+  $('#tree-top').replaceChildren(...parts.slice(0, cut).filter(Boolean));
+  $('#tree').replaceChildren(...parts.slice(cut).filter(Boolean));
   $('#tag-list').replaceChildren(...tags.map(([t]) => h('option', { value: t })));
 }
 
-async function addTag() {
-  const name = await ask({ title: 'Add tag', text: 'It shows under Tags right away. Drag crumbs onto it to tag them.', ok: 'Add tag', input: { type: 'text', placeholder: 'e.g. recipes' } });
-  if (!name || !name.trim()) return;
-  try {
-    const r = await api('POST', '/api/tags', { add: name.trim() });
-    prefs.sideTab = 'tags'; savePrefs();
-    await loadBookmarks();
-    if (!document.body.classList.contains('side-open')) setSidebar(true);
-    toast(`Tag #${r.tag} added`);
-  } catch (err) { toast(err.message); }
+function tagIcon(t) {
+  const svg = icon('tag', 'ico');
+  const c = (S.tagColors || {})[t];
+  if (c) svg.style.setProperty('color', c);
+  return svg;
 }
+
+const addTag = () => openTagDialog(null);
+
+// Add a tag, or rename / recolor / remove one.
+let td = null;
+function openTagDialog(tag) {
+  td = { tag, color: tag ? (S.tagColors || {})[tag] || '' : '' };
+  $('#tag-title').textContent = tag ? `Edit #${tag}` : 'Add tag';
+  $('#tag-form').elements.name.value = tag || '';
+  $('#tag-error').hidden = true;
+  $('#tag-delete').hidden = !tag;
+  renderTagColors();
+  $('#tag-dlg').showModal();
+  $('#tag-form').elements.name.focus();
+}
+function renderTagColors() {
+  $('#tag-colors').replaceChildren(...FOLDER_COLORS.map((c) => {
+    const b = h('button', {
+      type: 'button', class: 'swatch' + (c ? '' : ' none') + (td.color === c ? ' on' : ''),
+      title: c || 'No color', 'aria-label': c ? `Color ${c}` : 'No color', 'aria-pressed': String(td.color === c),
+      onclick: () => { td.color = c; renderTagColors(); },
+    });
+    if (c) b.style.setProperty('--sw', c);
+    return b;
+  }));
+}
+$('#tag-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('#tag-form').elements.name.value.trim().replace(/^#/, '').toLowerCase();
+  const err = $('#tag-error');
+  if (!name) { err.textContent = 'Type a tag name.'; err.hidden = false; return; }
+  try {
+    if (!td.tag) {
+      await api('POST', '/api/tags', { add: name, color: td.color });
+      prefs.sideTab = 'tags'; savePrefs();
+    } else {
+      let cur = td.tag;
+      if (name !== cur) {
+        await api('POST', '/api/tags', { from: cur, to: name });
+        if (S.view === 'tag:' + cur) S.view = 'tag:' + name;
+        cur = name;
+      }
+      if (td.color !== ((S.tagColors || {})[td.tag] || '')) await api('POST', '/api/tags', { tag: cur, color: td.color });
+    }
+    $('#tag-dlg').close();
+    await loadBookmarks();
+    toast(td.tag ? 'Tag saved' : `Tag #${name} added`);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+});
+$('#tag-delete').addEventListener('click', () => { const t = td.tag; $('#tag-dlg').close(); removeTag(t); });
 
 async function renameTag(t) {
   const to = await ask({ title: `Rename #${t}`, text: 'Every crumb with this tag gets the new name.', ok: 'Rename', input: { type: 'text', value: t } });
@@ -3060,7 +3155,7 @@ $('#reset-settings').addEventListener('click', async () => {
   try { ['crumbs.prefs', 'crumbs.tree', 'crumbs.bgimg'].forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
   Object.assign(prefs, {
     theme: 'system', palette: 'mono', accent: '', accentFg: '', folderTint: true, size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
-    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false, sideTab: 'folders',
+    newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false, sideTab: 'folders', sideW: 296,
     fields: Object.fromEntries(FIELDS.map(([k, , on]) => [k, on])),
   });
   treeState.open.clear();

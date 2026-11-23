@@ -12,6 +12,7 @@ try {
     if (k in f ? !f[k] : k in def) hide.push(k);
   });
   r.dataset.hide = hide.join(' ');
+  if (p.sideW) r.style.setProperty('--side-w', p.sideW + 'px');
   if (p.size) r.dataset.size = p.size;
   if (p.scale) { r.style.setProperty('--card-min', p.scale + 'px'); r.dataset.size = p.scale < 210 ? 's' : p.scale > 300 ? 'l' : 'm'; }
   if (p.layout) r.dataset.layout = p.layout;

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -149,21 +150,76 @@ func (a *App) handleBulk(w http.ResponseWriter, r *http.Request, who *Who) {
 	writeJSON(w, http.StatusOK, map[string]int{"changed": changed, "skipped": skipped})
 }
 
-// handleTagEdit makes a new, empty tag ({"add"}), renames a tag ({"from","to"})
-// or removes it everywhere ({"from"} with an empty "to").
+// tagColorMap reads a user's tag colors ({"tag":"#rrggbb"}); bad data gives an empty map.
+func tagColorMap(s string) map[string]string {
+	m := map[string]string{}
+	if s != "" {
+		json.Unmarshal([]byte(s), &m)
+	}
+	return m
+}
+
+// okColor accepts "" (no color) or "#rrggbb".
+func okColor(c string) bool {
+	if c == "" {
+		return true
+	}
+	if len(c) != 7 || c[0] != '#' {
+		return false
+	}
+	for _, ch := range c[1:] {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", ch) {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *App) saveTagColors(userID int64, m map[string]string) {
+	b, _ := json.Marshal(m)
+	a.db.Exec(`UPDATE users SET tag_colors = ? WHERE id = ?`, string(b), userID)
+}
+
+// handleTagEdit makes a new, empty tag ({"add"}, optional "color"), sets a
+// tag's color ({"tag","color"}), renames a tag ({"from","to"}) or removes it
+// everywhere ({"from"} with an empty "to").
 func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 	var in struct {
-		Add  string `json:"add"`
-		From string `json:"from"`
-		To   string `json:"to"`
+		Add   string  `json:"add"`
+		Tag   string  `json:"tag"`
+		Color *string `json:"color"`
+		From  string  `json:"from"`
+		To    string  `json:"to"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		jsonErr(w, http.StatusBadRequest, "bad request")
 		return
 	}
-	var saved string
-	a.db.QueryRow(`SELECT saved_tags FROM users WHERE id = ?`, who.ID).Scan(&saved)
+	if in.Color != nil && !okColor(*in.Color) {
+		jsonErr(w, http.StatusBadRequest, "bad color")
+		return
+	}
+	var saved, colorsJSON string
+	a.db.QueryRow(`SELECT saved_tags, tag_colors FROM users WHERE id = ?`, who.ID).Scan(&saved, &colorsJSON)
 	savedTags := splitTags(saved)
+	colors := tagColorMap(colorsJSON)
+	setColor := func(tag string) {
+		if in.Color == nil || tag == "" {
+			return
+		}
+		if *in.Color == "" {
+			delete(colors, tag)
+		} else {
+			colors[tag] = strings.ToLower(*in.Color)
+		}
+		a.saveTagColors(who.ID, colors)
+	}
+	if in.Add == "" && in.From == "" && in.Tag != "" {
+		tag := cleanTag(in.Tag)
+		setColor(tag)
+		writeJSON(w, http.StatusOK, map[string]string{"tag": tag})
+		return
+	}
 	if in.Add != "" {
 		add := cleanTag(in.Add)
 		if add == "" {
@@ -179,6 +235,7 @@ func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 			jsonErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		setColor(add)
 		writeJSON(w, http.StatusOK, map[string]string{"tag": add})
 		return
 	}
@@ -229,6 +286,14 @@ func (a *App) handleTagEdit(w http.ResponseWriter, r *http.Request, who *Who) {
 		}
 	}
 	a.db.Exec(`UPDATE users SET saved_tags = ? WHERE id = ?`, joinSavedTags(keep), who.ID)
+	// So does its color.
+	if c, ok := colors[from]; ok {
+		delete(colors, from)
+		if to != "" {
+			colors[to] = c
+		}
+		a.saveTagColors(who.ID, colors)
+	}
 	writeJSON(w, http.StatusOK, map[string]int{"changed": len(list)})
 }
 
@@ -278,7 +343,7 @@ func (a *App) handleWipe(w http.ResponseWriter, r *http.Request, who *Who) {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	tx.Exec(`UPDATE users SET saved_tags = '' WHERE id = ?`, who.ID)
+	tx.Exec(`UPDATE users SET saved_tags = '', tag_colors = '' WHERE id = ?`, who.ID)
 	res, err := tx.Exec(`DELETE FROM folders WHERE user_id = ?`, who.ID)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
