@@ -1234,6 +1234,7 @@ function allTags() {
   return [...counts.entries()].sort((a, b) => coll.compare(a[0], b[0]));
 }
 
+let lastSideTab = null;
 function renderTree() {
   const tabsIn = new Map();
   for (const b of sorted(S.list)) {
@@ -1265,8 +1266,13 @@ function renderTree() {
     type: 'button', role: 'tab', class: tab === v ? 'on' : '', 'aria-selected': String(tab === v),
     onclick: () => { prefs.sideTab = v; savePrefs(); renderTree(); },
   }, label, h('span', { class: 'count', text: String(n) }));
-  parts.push(h('div', { class: 'side-tabs', role: 'tablist' },
-    tabBtn('folders', 'Folders', S.folders.length), tabBtn('tags', 'Tags', tags.length)));
+  // The underline starts where it was and slides to the chosen tab.
+  const from = lastSideTab || tab;
+  const tabsEl = h('div', { class: 'side-tabs' + (from === 'tags' ? ' at-tags' : ''), role: 'tablist' },
+    tabBtn('folders', 'Folders', S.folders.length), tabBtn('tags', 'Tags', tags.length));
+  if (from !== tab) requestAnimationFrame(() => requestAnimationFrame(() => tabsEl.classList.toggle('at-tags', tab === 'tags')));
+  lastSideTab = tab;
+  parts.push(tabsEl);
 
   if (tab === 'folders') {
     parts.push(...top);
