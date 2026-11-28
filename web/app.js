@@ -102,6 +102,7 @@ const prefs = Object.assign(
   {
     theme: 'system', palette: 'mono', accent: '', accentFg: '', folderTint: true, size: 'm', scale: 250, layout: 'grid', bg: 'plain', bgBW: true, bgStrength: 35,
     newTab: true, sort: { key: 'created', dir: 'desc' }, sideOpen: false, sideTab: 'folders',
+    peek: false, peekDelay: 1500, startAt: 'all', lastView: null,
   },
   readStore('crumbs.prefs', {}));
 const savePrefs = () => writeStore('crumbs.prefs', prefs);
@@ -186,7 +187,7 @@ const S = {
   fmap: new Map(),     // id -> folder
   kids: new Map(),     // parent id (0 = top) -> child folders
   totals: new Map(),   // folder id -> crumbs inside, including subfolders
-  view: null,          // null = all, 0 = Uncategorized, n = folder id
+  view: prefs.startAt === 'last' && prefs.lastView !== undefined ? prefs.lastView : null, // null = all, 0 = Uncategorized, n = folder id
   q: '',
 };
 let cards = new Map();
@@ -991,6 +992,8 @@ function filterGrid() {
 
 function selectView(v) {
   S.view = v;
+  // Remembered for "Open Crumbs at: Last place visited" (not the Trash or Broken links).
+  if (v !== 'trash' && v !== 'broken' && prefs.lastView !== v) { prefs.lastView = v; savePrefs(); }
   filterGrid();
   renderTree();
   if (!wide()) setSidebar(false);
@@ -1074,6 +1077,7 @@ function selectAllVisible() {
   updateSelection();
 }
 
+let selbarTimer = 0;
 function updateSelection() {
   const n = S.sel.size;
   document.body.classList.toggle('selecting', n > 0);
@@ -1084,8 +1088,17 @@ function updateSelection() {
     el.querySelector('.card-check')?.setAttribute('aria-checked', String(on));
   }
   const bar = $('#selbar');
-  bar.hidden = !n;
-  if (!n) return;
+  // Slides up from the bottom edge, and back down when the selection is cleared.
+  clearTimeout(selbarTimer);
+  if (!n) {
+    if (!bar.hidden && !bar.classList.contains('leaving')) {
+      bar.classList.add('leaving');
+      selbarTimer = setTimeout(() => { bar.hidden = true; bar.classList.remove('leaving'); }, 260);
+    }
+    return;
+  }
+  bar.classList.remove('leaving');
+  bar.hidden = false;
   $('#sel-count').textContent = `${n} selected`;
   const btn = (label, fn, ic) => h('button', { type: 'button', class: 'btn small', onclick: fn }, ic ? icon(ic) : null, label);
   const trash = S.view === 'trash';
@@ -2312,7 +2325,7 @@ $('#folder-dlg').addEventListener('click', (e) => {
 $('#folder-dlg').addEventListener('close', () => showIconPop(false));
 
 // Clicking the dimmed area outside the folder or tag window closes it.
-for (const id of ['#folder-dlg', '#tag-dlg', '#smart-dlg']) {
+for (const id of ['#folder-dlg', '#tag-dlg', '#smart-dlg', '#peek-dlg']) {
   const dlg = $(id);
   let downOutside = false;
   const outside = (e) => {
@@ -3253,7 +3266,7 @@ function openSettings() {
   $('#settings').showModal();
 }
 
-const SEGMENTS = [['#set-theme', 'theme'], ['#set-layout', 'layout'], ['#set-bg', 'bg']];
+const SEGMENTS = [['#set-theme', 'theme'], ['#set-layout', 'layout'], ['#set-bg', 'bg'], ['#set-start', 'startAt']];
 
 function renderSettings() {
   for (const [id, key] of SEGMENTS) {
@@ -3266,6 +3279,10 @@ function renderSettings() {
   $('#bg-bw').checked = !!prefs.bgBW;
   $('#bg-strength').value = String(prefs.bgStrength);
   $('#set-newtab').checked = prefs.newTab;
+  $('#set-peek').checked = !!prefs.peek;
+  $('#peek-range').hidden = !prefs.peek;
+  $('#set-peek-delay').value = String(prefs.peekDelay || 1500);
+  $('#peek-delay-val').textContent = `${(prefs.peekDelay || 1500) / 1000} s`;
   $('#set-scale').value = String(prefs.scale);
   $('#set-palette').value = prefs.palette || 'mono';
   $('#set-ftint').checked = prefs.folderTint !== false;
@@ -3399,6 +3416,97 @@ $('#bg-file').addEventListener('change', async (e) => {
 });
 $('#bg-bw').addEventListener('change', (e) => { prefs.bgBW = e.target.checked; savePrefs(); applyPrefs(); });
 $('#bg-strength').addEventListener('input', (e) => { prefs.bgStrength = Number(e.target.value); savePrefs(); applyPrefs(); });
+
+$('#set-peek').addEventListener('change', (e) => { prefs.peek = e.target.checked; savePrefs(); renderSettings(); });
+$('#set-peek-delay').addEventListener('input', (e) => { prefs.peekDelay = Number(e.target.value); savePrefs(); renderSettings(); });
+
+// ---- hover preview: rest the mouse on a crumb to see it big, and play videos ----
+let peekCardTimer = 0;
+function youTubeId(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    if (host === 'youtu.be') return u.pathname.slice(1, 12);
+    if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      if (u.searchParams.get('v')) return u.searchParams.get('v').slice(0, 11);
+      const m = u.pathname.match(/^\/(shorts|embed|live)\/([\w-]{11})/);
+      if (m) return m[2];
+    }
+  } catch { /* not a link */ }
+  return '';
+}
+function canPeek() {
+  return prefs.peek && !document.querySelector('dialog[open]') && !document.querySelector('.dd.open')
+    && !document.body.classList.contains('dragging-crumbs') && !lasso.on && !S.sel.size;
+}
+$('#grid').addEventListener('mouseover', (e) => {
+  const el = e.target.closest('.card');
+  if (!el || el.contains(e.relatedTarget)) return;
+  clearTimeout(peekCardTimer);
+  if (!prefs.peek) return;
+  peekCardTimer = setTimeout(() => {
+    const b = [...S.list, ...S.trash].find((x) => x.id === Number(el.dataset.id));
+    if (b && canPeek() && el.matches(':hover')) openPeek(b, el);
+  }, prefs.peekDelay || 1500);
+});
+$('#grid').addEventListener('mouseout', (e) => {
+  const el = e.target.closest('.card');
+  if (el && !el.contains(e.relatedTarget)) clearTimeout(peekCardTimer);
+});
+['mousedown', 'wheel', 'keydown'].forEach((t) => addEventListener(t, () => clearTimeout(peekCardTimer), { passive: true }));
+
+let peekB = null;
+function openPeek(b, fromEl) {
+  peekB = b;
+  const yt = youTubeId(b.url);
+  const media = $('#peek-media');
+  if (yt) {
+    media.replaceChildren(h('iframe', {
+      src: `https://www.youtube-nocookie.com/embed/${yt}?rel=0`, title: b.name,
+      allow: 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen', allowfullscreen: true,
+      referrerpolicy: 'strict-origin-when-cross-origin',
+    }));
+  } else if (b.thumb) {
+    media.replaceChildren(h('img', { src: b.thumb, alt: '' }));
+  } else {
+    const s = searchOf(b.url);
+    media.replaceChildren(s ? searchThumb(s, b.icon) : h('div', { class: 'thumb-empty' },
+      b.icon ? h('img', { src: b.icon, alt: '' }) : h('span', { text: firstLetter(b.name || hostOf(b.url)) })));
+  }
+  media.classList.toggle('video', !!yt);
+  $('#peek-fav').hidden = !b.icon;
+  if (b.icon) $('#peek-fav').src = b.icon;
+  $('#peek-name').textContent = b.name || hostOf(b.url);
+  $('#peek-url').textContent = b.url;
+  $('#peek-url').href = b.url;
+  $('#peek-open').href = b.url;
+  const folder = b.folderId && S.fmap.get(b.folderId);
+  $('#peek-meta').replaceChildren(...[
+    folder ? h('span', { class: 'tag', title: folderPath(folder.id) }, folderIcon(folder, 'tag-ico'), folderPath(folder.id)) : null,
+    ...(b.tags || []).map((t) => {
+      const c = (S.tagColors || {})[t];
+      const el = h('span', { class: 'hash' + (c ? ' colored' : ''), text: '#' + t });
+      if (c) el.style.setProperty('--tc', c);
+      return el;
+    }),
+  ].filter(Boolean));
+  $('#peek-desc').textContent = b.description || '';
+  $('#peek-desc').hidden = !b.description;
+  $('#peek-dates').textContent = [b.created ? 'Created ' + shortDate(b.created) : '', b.updated ? 'Updated ' + shortDate(b.updated) : ''].filter(Boolean).join(' · ');
+  $('#peek-edit').hidden = !!b.deleted;
+  // Grow out of the card it came from.
+  const dlg = $('#peek-dlg');
+  if (fromEl) {
+    const r = fromEl.getBoundingClientRect();
+    dlg.style.setProperty('--from-x', (r.left + r.width / 2 - innerWidth / 2) + 'px');
+    dlg.style.setProperty('--from-y', (r.top + r.height / 2 - innerHeight / 2) + 'px');
+  }
+  dlg.showModal();
+  $('#peek-open').focus({ preventScroll: true });
+}
+$('#peek-dlg').addEventListener('close', () => $('#peek-media').replaceChildren()); // stops the video
+$('#peek-edit').addEventListener('click', () => { const b = peekB; $('#peek-dlg').close(); openEditor(b); });
+$('#peek-open').addEventListener('click', () => $('#peek-dlg').close());
 
 $('#set-newtab').addEventListener('change', (e) => {
   prefs.newTab = e.target.checked;

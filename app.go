@@ -33,6 +33,7 @@ const appCSP = "default-src 'self'; " +
 	"img-src 'self' data: blob: http: https:; " +
 	"connect-src 'self' http: https:; " +
 	"style-src 'self'; script-src 'self'; object-src 'none'; " +
+	"frame-src https://www.youtube-nocookie.com; " +
 	"base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
 
 // secure adds security headers and blocks cross-site writes (CSRF).
